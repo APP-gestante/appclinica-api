@@ -17,7 +17,21 @@ async def get_user(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Obter dados do perfil do usuário.
+    **Recuperar informações detalhadas do perfil de um usuário.**
+
+    Este endpoint obtém os dados cadastrais do usuário correspondente ao identificador fornecido. 
+
+    ### 📌 Requisitos de Segurança
+    * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
+    * Qualquer usuário autenticado pode obter as próprias informações ou as de outros usuários do sistema (sujeito a regras de confidencialidade adicionais no frontend).
+
+    ### 📥 Parâmetros de Entrada
+    * `user_id` *(UUID, na URL)*: Identificador único universal do usuário desejado.
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Retorna os dados completos do usuário (ID, Nome, Email, Papel/Role, Telefone, Data de Nascimento, Avatar, ID da Clínica e status ativo/inativo).
+    * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
+    * **`404 NOT FOUND`**: Usuário com o `user_id` fornecido não foi encontrado no banco de dados.
     """
     user = await crud_user.get_user_by_id(db, user_id=user_id)
     if not user:
@@ -32,7 +46,25 @@ async def update_user(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Atualizar dados do perfil.
+    **Atualizar dados cadastrais do perfil de um usuário.**
+
+    Permite que um usuário modifique seus próprios dados de contato e de identificação (como nome, telefone e foto de avatar).
+
+    ### 📌 Requisitos de Segurança
+    * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
+    * **Restrição de Acesso**: O usuário logado só pode modificar o próprio perfil (`current_user.id == user_id`), a menos que possua o papel funcional de **`admin`**.
+
+    ### 📥 Parâmetros de Entrada
+    * `user_id` *(UUID, na URL)*: Identificador único universal do usuário a ser atualizado.
+    * `name` *(string, opcional, no corpo)*: Novo nome completo do usuário.
+    * `phone` *(string, opcional, no corpo)*: Novo número de telefone formatado.
+    * `avatar_url` *(string, opcional, no corpo)*: Nova URL da imagem de avatar do usuário.
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Retorna os dados do usuário atualizados com sucesso e o carimbo de data/hora da modificação (`updated_at`).
+    * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
+    * **`403 FORBIDDEN`**: Tentativa de atualizar o perfil de outro usuário sem possuir a role `admin`.
+    * **`404 NOT FOUND`**: Usuário com o `user_id` fornecido não foi encontrado.
     """
     if current_user.id != user_id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Not enough permissions")
@@ -52,7 +84,21 @@ async def get_user_clinic(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Obter informações da clínica do usuário.
+    **Obter informações completas sobre a clínica associada ao usuário.**
+
+    Este recurso é vital para aplicações SaaS *white-label*, retornando os metadados visuais, cores primárias/secundárias, logotipo e informações de contato da clínica à qual o usuário pertence.
+
+    ### 📌 Requisitos de Segurança & Performance
+    * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
+    * **Caching Otimizado**: Esta rota implementa cache automático no **Redis** com expiração de **5 minutos (300 segundos)** para reduzir a latência de rede e a carga no banco de dados.
+
+    ### 📥 Parâmetros de Entrada
+    * `user_id` *(UUID, na URL)*: Identificador único do usuário cujo vínculo com a clínica será consultado.
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Informações da clínica (ID, Nome, URL do logo, Paleta de cores, Endereço completo, Telefone, Email e Website).
+    * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
+    * **`404 NOT FOUND`**: Usuário não encontrado ou clínica não associada ao usuário informado.
     """
     user = await crud_user.get_user_by_id(db, user_id=user_id)
     if not user:

@@ -7,56 +7,58 @@ from app.models.enums import UserRole
 
 # -- User --
 
+# -- User --
+
 class UserBase(CoreModel):
-    email: EmailStr
-    name: str
-    role: UserRole = UserRole.patient
-    phone: Optional[str] = None
-    avatar_url: Optional[str] = None
-    date_of_birth: Optional[date] = None
+    email: EmailStr = Field(..., description="Endereço de email único do usuário.", examples=["maria@clinic.com"])
+    name: str = Field(..., description="Nome completo do usuário.", examples=["Maria da Silva"])
+    role: UserRole = Field(UserRole.patient, description="Papel funcional ou nível de permissão (patient, doctor, secretary, admin).", examples=["patient"])
+    phone: Optional[str] = Field(None, description="Número de telefone para contato.", examples=["(11) 99999-9999"])
+    avatar_url: Optional[str] = Field(None, description="URL da foto de perfil do usuário.", examples=["https://clinic.com/avatars/maria.jpg"])
+    date_of_birth: Optional[date] = Field(None, description="Data de nascimento do usuário.", examples=["1990-05-15"])
 
 class UserCreate(UserBase):
-    password: str
-    clinic_id: UUID
+    password: str = Field(..., description="Senha forte para login na plataforma.", examples=["senha_secreta_123"])
+    clinic_id: UUID = Field(..., description="Identificador único (UUID) da clínica associada.", examples=["123e4567-e89b-12d3-a456-426614174000"])
 
 class UserUpdate(CoreModel):
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    avatar_url: Optional[str] = None
+    name: Optional[str] = Field(None, description="Nome completo atualizado do usuário.", examples=["Maria da Silva Santos"])
+    phone: Optional[str] = Field(None, description="Número de telefone atualizado.", examples=["(11) 98888-8888"])
+    avatar_url: Optional[str] = Field(None, description="URL atualizada do avatar.", examples=["https://clinic.com/avatars/maria_new.jpg"])
 
 class UserResponse(UserBase, BaseEntitySchema):
-    clinic_id: UUID
-    is_active: bool
+    clinic_id: UUID = Field(..., description="Identificador único (UUID) da clínica associada.")
+    is_active: bool = Field(..., description="Indica se a conta de usuário está ativa e habilitada para login.", examples=[True])
 
 # -- Patient --
 
 class PatientCreate(CoreModel):
-    doctor_id: UUID
-    prontuario: str
-    lmp_date: date
-    edd: date
-    height_cm: Optional[str] = None
-    weight_initial_kg: Optional[str] = None
-    imc: Optional[str] = None
-    blood_type: Optional[str] = None
-    acompanhante: Optional[str] = None
-    hospital: Optional[str] = None
+    doctor_id: UUID = Field(..., description="Identificador único (UUID) do médico/obstetra responsável.")
+    prontuario: str = Field(..., description="Número de registro ou identificador do prontuário médico na clínica.", examples=["PR-98765"])
+    lmp_date: date = Field(..., description="Data da Última Menstruação (DUM), usada no cálculo de semanas gestacionais.", examples=["2023-11-01"])
+    edd: date = Field(..., description="Data Provável do Parto (DPP) estimada matematicamente.", examples=["2024-08-07"])
+    height_cm: Optional[str] = Field(None, description="Altura da gestante em centímetros.", examples=["165"])
+    weight_initial_kg: Optional[str] = Field(None, description="Peso inicial da gestante no início do pré-natal em kg.", examples=["62.5"])
+    imc: Optional[str] = Field(None, description="Índice de Massa Corporal (IMC) inicial calculado.", examples=["22.9"])
+    blood_type: Optional[str] = Field(None, description="Grupo sanguíneo e fator Rh da gestante.", examples=["O+"])
+    acompanhante: Optional[str] = Field(None, description="Nome do acompanhante principal indicado pela gestante.", examples=["João da Silva"])
+    hospital: Optional[str] = Field(None, description="Maternidade ou hospital escolhido para o parto.", examples=["Hospital Maternidade Santa Joana"])
 
 class PatientResponse(PatientCreate, BaseEntitySchema):
-    user_id: UUID
-    current_week: Optional[int] = None
+    user_id: UUID = Field(..., description="Identificador único do usuário associado a este perfil de paciente.")
+    current_week: Optional[int] = Field(None, description="Idade gestacional calculada dinamicamente em semanas.", examples=[24])
     
 # -- Clinic --
 
 class ClinicBase(CoreModel):
-    name: str
-    logo_url: Optional[str] = None
-    primary_color: Optional[str] = None
-    secondary_color: Optional[str] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    website: Optional[str] = None
+    name: str = Field(..., description="Nome da clínica de obstetrícia / parceira white-label.", examples=["Clínica Lunna"])
+    logo_url: Optional[str] = Field(None, description="URL do logotipo personalizado da clínica.", examples=["https://lunnaclinica.com/logo.png"])
+    primary_color: Optional[str] = Field(None, description="Código hexadecimal da cor primária da marca no aplicativo móvel.", examples=["#8DAA91"])
+    secondary_color: Optional[str] = Field(None, description="Código hexadecimal da cor secundária da marca no aplicativo móvel.", examples=["#E5987D"])
+    address: Optional[str] = Field(None, description="Endereço físico completo da clínica.", examples=["Av. Paulista, 1000 - Bela Vista, São Paulo - SP"])
+    phone: Optional[str] = Field(None, description="Telefone de contato da clínica.", examples=["(11) 3000-0000"])
+    email: Optional[EmailStr] = Field(None, description="Endereço de email institucional da clínica.", examples=["contato@lunnaclinica.com"])
+    website: Optional[str] = Field(None, description="Endereço eletrônico (site oficial) da clínica.", examples=["https://lunnaclinica.com"])
 
 class ClinicCreate(ClinicBase):
     pass

@@ -16,7 +16,22 @@ async def login(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Autenticar usuário com email e senha.
+    **Autenticar usuário na plataforma utilizando email e senha.**
+
+    Este endpoint realiza a validação das credenciais de acesso do usuário. Em caso de sucesso, gera um par de tokens JWT (JSON Web Token) criptografados e assina a sessão.
+
+    ### 📌 Requisitos de Segurança
+    * Rota **Pública** (não requer cabeçalhos de autorização prévios).
+    * Protegida por limitador de taxa (**Rate Limiting**) para mitigar ataques de força bruta.
+
+    ### 📥 Parâmetros de Entrada
+    * `email` *(string, obrigatório)*: Endereço de email registrado do usuário.
+    * `password` *(string, obrigatório)*: Senha associada à conta.
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Retorna os tokens JWT de acesso (`access_token`), atualização (`refresh_token`), tipo do token (`bearer`) e o payload com os dados cadastrais básicos do usuário.
+    * **`401 UNAUTHORIZED`**: Credenciais incorretas (email ou senha inválidos).
+    * **`400 BAD REQUEST`**: Conta de usuário desativada (`is_active` igual a falso).
     """
     result = await db.execute(select(User).where(User.email == request.email))
     user = result.scalar_one_or_none()
@@ -42,7 +57,15 @@ async def login(
 @router.post("/logout")
 async def logout(current_user: User = Depends(get_current_user)):
     """
-    Finalizar sessão. No caso de JWT stateless, geralmente apenas avisamos o cliente para deletar o token,
-    ou implementamos uma blacklist com Redis.
+    **Encerrar a sessão ativa do usuário.**
+
+    Como a autenticação JWT é essencialmente *stateless*, este endpoint atua como uma sinalização para que o cliente descarte com segurança os tokens armazenados localmente.
+
+    ### 📌 Requisitos de Segurança
+    * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Confirmação de encerramento de sessão bem-sucedida.
+    * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
     """
     return {"message": "Logged out successfully"}

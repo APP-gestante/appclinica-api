@@ -8,6 +8,7 @@ engine = create_async_engine(
     echo=False, # Set to True para debugar SQL
     future=True,
     pool_pre_ping=True,
+    connect_args={"ssl": "require"},
 )
 
 # Criar o construtor de sessões

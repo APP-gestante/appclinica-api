@@ -25,7 +25,7 @@ class WorkerSettings:
     Para rodar os workers: arq app.worker.WorkerSettings
     """
     functions = [send_email_task, generate_report_task]
-    redis_settings = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
+    redis_settings = settings.REDIS_URL or f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
     
     # Executado ao ligar o worker
     async def on_startup(ctx):

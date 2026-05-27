@@ -726,37 +726,39 @@ Cadastra nova paciente criando `User` (role=patient) e `Patient` em uma única t
 
 ---
 
-## Migration
+## Migrations
 
-A tabela `announcements` foi adicionada via migration manual:
-
-```
-alembic/versions/a1b2c3d4e5f6_add_announcements_table.py
-```
-
-Para aplicar ao banco:
+Aplicar todas de uma vez:
 
 ```bash
 alembic upgrade head
+```
+
+| Migration ID | O que cria |
+|---|---|
+| `a1b2c3d4e5f6` | `announcements` |
+| `b1c2d3e4f5a6` | `lab_tests`, `medications`, col `push_token` e `onboarding_completed` em `users` |
+| `c1d2e3f4a5b6` | `notifications`, `reminders` |
+| `d1e2f3a4b5c6` | `baby_names`, `patient_baby_name_favorites`, `fetal_development` |
+| `e1f2a3b4c5d6` | `messages`, `user_announcement_reads` |
+
+Após migrar, popular dados estáticos (uma única vez):
+
+```bash
+python alembic/seeds/baby_names.py        # 203 nomes
+python alembic/seeds/fetal_development.py # semanas 1–42
 ```
 
 ---
 
 ## Resumo por Role
 
-| Role | Acesso |
+| Role | Acesso (v1 + v2) |
 |---|---|
-| `patient` | Próprios vitais, prontuário, ultrassons, vacinas, avisos da clínica |
-| `doctor` | Tudo do patient + registrar USG/vacina + dashboard + agenda + lista de pacientes |
-| `secretary` | Dashboard da clínica + cadastrar pacientes + publicar avisos |
+| `patient` | Próprios vitais, prontuário, ultrassons, vacinas, avisos da clínica, exames laboratoriais, medicamentos, notificações, chat, nomes de bebê (favoritos), desenvolvimento fetal |
+| `doctor` | Tudo do patient + registrar USG/vacina/exame/medicamento + dashboard + agenda + lista de pacientes + agendamento por paciente |
+| `secretary` | Dashboard + relatório diário + cadastrar pacientes + publicar avisos + enviar lembretes |
 | `admin` | Acesso total (equivalente a doctor + secretary) |
 
-## Endpoints que ainda retornam mock (v2)
-
-| Endpoint | Tela | Motivo do adiamento |
-|---|---|---|
-| Chat / Mensagens | `ChatScreen` | Requer model `Message` + considerações de real-time |
-| Exames laboratoriais | `ExamesScreen` | Requer model `LabTest` |
-| Medicamentos | `MedicamentosScreen` | Requer model `Medication` |
-| Nomes de bebê | `NomesBebeScreen` | Requer seed de dados |
-| Desenvolvimento fetal | `FetoScreen` | Requer tabela estática pré-populada por semana |
+> Todos os endpoints de v2 estão documentados em **`API_V2_BACKLOG.md`**.
+> Não há mais endpoints retornando dados mock — todos foram implementados com dados reais.

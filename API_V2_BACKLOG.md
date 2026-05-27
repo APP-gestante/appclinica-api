@@ -22,28 +22,40 @@ Base URL: `http://<host>/api/v1`
 | Relatório diário | ✅ | `GET /clinics/{id}/reports/daily` |
 | Onboarding flag | ✅ | `PATCH /users/{id}/onboarding` |
 | Push token | ✅ | `PATCH /users/{id}/push-token` |
-| Chat / Mensagens | ⏳ 🔴 | `GET/POST /patients/{id}/messages` + WebSocket |
-| Notificações | ⏳ 🟡 | `GET /users/{id}/notifications`, `PATCH /notifications/{id}/read` |
-| Lembretes | ⏳ 🟡 | `POST /patients/{id}/reminders` |
-| Avisos — detalhe + lido | ⏳ 🟡 | `GET/PATCH /clinics/{id}/announcements/{id}[/read]` |
-| Nomes de bebê | ⏳ 🔵 | 4 rotas |
-| Desenvolvimento fetal | ⏳ 🔵 | `GET /fetal-development/{week}` |
+| Notificações | ✅ | `GET /users/{id}/notifications`, `PATCH /notifications/{id}/read` |
+| Lembretes | ✅ | `POST /patients/{id}/reminders` |
+| Nomes de bebê | ✅ | 4 rotas + seed 203 nomes |
+| Desenvolvimento fetal | ✅ | `GET /fetal-development/{week}` + seed 42 semanas |
+| Chat / Mensagens | ✅ | `GET/POST /patients/{id}/messages`, `PATCH .../read` + WebSocket |
+| Avisos — detalhe + lido | ✅ | `GET/PATCH /clinics/{id}/announcements/{id}[/read]` |
+
+**Todas as 22 rotas da v2 estão implementadas.**
 
 ---
 
-## Migration obrigatória (Fase 1)
-
-Antes de usar qualquer endpoint ✅ desta fase, aplique:
+## Setup completo (todas as fases)
 
 ```bash
+# 1. Aplicar todas as migrations em ordem
 alembic upgrade head
+
+# 2. Popular dados estáticos (executar uma única vez)
+python alembic/seeds/baby_names.py       # 203 nomes de bebê
+python alembic/seeds/fetal_development.py  # 42 semanas gestacionais
+
+# 3. Iniciar worker ARQ (notificações + lembretes)
+arq app.worker.WorkerSettings
 ```
 
-Migração `b1c2d3e4f5a6` cria:  
-- Tabela `lab_tests`  
-- Tabela `medications`  
-- Coluna `push_token` em `users`  
-- Coluna `onboarding_completed` em `users`
+### Cadeia de migrations
+
+| ID | Descrição |
+|---|---|
+| `a1b2c3d4e5f6` | `announcements` |
+| `b1c2d3e4f5a6` | `lab_tests`, `medications`, `push_token`, `onboarding_completed` |
+| `c1d2e3f4a5b6` | `notifications`, `reminders` |
+| `d1e2f3a4b5c6` | `baby_names`, `patient_baby_name_favorites`, `fetal_development` |
+| `e1f2a3b4c5d6` | `messages`, `user_announcement_reads` |
 
 ---
 
@@ -313,130 +325,11 @@ async function registerPushToken(userId: string) {
 
 ---
 
----
+## ✅ Notificações
 
-## ⏳ 🔴 Chat / Mensagens — WebSocket + HTTP
-
-**Tela mobile:** `ChatScreen`  
-**Arquitetura definida:** WebSocket nativo FastAPI + Redis Pub/Sub (multi-worker)  
-**Modelo necessário:** `Message` (nova migration)
-
-### HTTP — Histórico e envio
-
-#### `GET /patients/{patient_id}/messages`
-
-Lista histórico paginado. Use `before_id` para carregar mensagens mais antigas (cursor reverso).
-
-**Query params:**
-| Param | Tipo | Padrão | Descrição |
-|---|---|---|---|
-| `limit` | int | 30 | — |
-| `offset` | int | 0 | — |
-| `before_id` | uuid | — | Retorna mensagens anteriores a este ID |
-
-**Resposta 200:**
-```json
-{
-  "total": 45,
-  "limit": 30,
-  "offset": 0,
-  "data": [
-    {
-      "id": "<uuid>",
-      "patient_id": "<uuid>",
-      "sender_id": "<uuid>",
-      "sender_role": "doctor",
-      "sender_name": "Dra. Ana Lima",
-      "content": "Seus exames estão ótimos!",
-      "read": false,
-      "created_at": "2024-03-15T10:00:00Z"
-    }
-  ]
-}
-```
-
-#### `POST /patients/{patient_id}/messages`
-
-Envia mensagem via HTTP (alternativa ao WS, útil para notificação offline).
-
-**Body:**
-```json
-{ "content": "Dra, tenho uma dúvida sobre a dieta." }
-```
-
-**Resposta 201:** objeto `MessageResponse`
-
-#### `PATCH /patients/{patient_id}/messages/read`
-
-Marca todas as mensagens não lidas como lidas para o usuário autenticado.
-
-**Resposta 200:**
-```json
-{ "updated": 3 }
-```
-
----
-
-### WebSocket — Tempo real
-
-#### `WS /patients/{patient_id}/ws/chat?token=<access_token>`
-
-> O header `Authorization` não é suportado em conexões WebSocket. O token JWT deve ir no query param `token`.
-
-**Protocolo:**
-
-1. App abre conexão: `ws://api/api/v1/patients/<uuid>/ws/chat?token=<jwt>`
-2. Servidor valida token e registra conexão
-3. App envia mensagem:
-```json
-{ "content": "Olá Dra., tudo bem?" }
-```
-4. Servidor persiste no banco, publica no Redis `chat:<patient_id>`, e retransmite para todas as conexões abertas do mesmo `patient_id`
-5. Todos os clientes conectados (paciente + médico) recebem:
-```json
-{
-  "id": "<uuid>",
-  "sender_id": "<uuid>",
-  "sender_role": "patient",
-  "sender_name": "Maria da Silva",
-  "content": "Olá Dra., tudo bem?",
-  "created_at": "2024-03-15T10:05:00Z"
-}
-```
-6. App deve reconectar automaticamente ao perder conexão (back-off exponencial recomendado)
-
-**Integração no app (exemplo com `expo-websocket` ou WebSocket nativo):**
-```ts
-const ws = new WebSocket(
-  `${WS_BASE_URL}/patients/${patientId}/ws/chat?token=${accessToken}`
-);
-
-ws.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  setMessages(prev => [message, ...prev]);
-};
-
-ws.onclose = () => {
-  // Reconectar após delay
-  setTimeout(() => openChat(), 3000);
-};
-
-const sendMessage = (content: string) => {
-  ws.send(JSON.stringify({ content }));
-};
-```
-
-**RBAC:**
-- Paciente: acessa apenas conversas do próprio `patient_id`
-- Médico/secretária: acessa qualquer conversa da clínica
-
----
-
-## ⏳ 🟡 Notificações
-
-**Tela mobile:** `PerfilScreen` — item "Notificações" (sem destino atual)  
-**Modelo necessário:** `Notification` (nova migration)  
-**Entrega:** in-app (banco) + Expo Push via ARQ worker (requer `push_token` cadastrado ✅)
+**Tela mobile:** `PerfilScreen` — item "Notificações"  
+**Migration:** `c1d2e3f4a5b6`  
+**Entrega:** in-app (banco) + Expo Push via worker ARQ (requer `push_token` cadastrado)
 
 ### `GET /users/{user_id}/notifications`
 
@@ -451,17 +344,19 @@ const sendMessage = (content: string) => {
 ```json
 {
   "total": 10,
-  "unread": 3,
   "limit": 20,
   "offset": 0,
   "data": [
     {
       "id": "<uuid>",
+      "user_id": "<uuid>",
       "type": "appointment_reminder",
       "title": "Consulta amanhã",
       "body": "Lembrete: consulta às 10h com Dra. Ana Lima.",
       "read": false,
-      "created_at": "2024-03-14T18:00:00Z"
+      "data": null,
+      "created_at": "2024-03-14T18:00:00Z",
+      "updated_at": "2024-03-14T18:00:00Z"
     }
   ]
 }
@@ -471,28 +366,25 @@ Valores válidos para `type`: `appointment_reminder` · `clinic_announcement` ·
 
 ### `PATCH /notifications/{notification_id}/read`
 
-**Resposta 200:**
-```json
-{ "read": true }
-```
+**Resposta 200:** objeto `NotificationResponse` com `read: true`
 
 **Integração no app:**
 ```ts
-// Badge de notificações (exibir contagem de não lidas):
+// Badge de notificações não lidas:
 const { data } = await api.get(`/users/${userId}/notifications?unread_only=true&limit=1`);
 setUnreadCount(data.total);
 
-// Ao abrir notificação:
+// Ao abrir uma notificação:
 await api.patch(`/notifications/${notification.id}/read`);
 ```
 
 ---
 
-## ⏳ 🟡 Lembretes
+## ✅ Lembretes
 
 **Tela mobile:** ação "Enviar Lembrete" no dashboard da secretária  
-**Modelo necessário:** `Reminder` (nova migration)  
-**Entrega:** enfileira job no ARQ worker que dispara push via Expo no horário agendado  
+**Migration:** `c1d2e3f4a5b6`  
+**Entrega:** job ARQ com `_defer_until=send_at` — dispara push Expo no horário agendado  
 **RBAC:** `secretary`, `admin`
 
 ### `POST /patients/{patient_id}/reminders`
@@ -513,50 +405,26 @@ Valores válidos para `type`: `appointment` · `exam` · `medication`
 {
   "id": "<uuid>",
   "patient_id": "<uuid>",
+  "created_by": "<uuid>",
   "type": "appointment",
   "message": "Lembrete: sua consulta é amanhã às 10h com Dra. Ana Lima.",
   "send_at": "2024-03-14T08:00:00Z",
   "sent_at": null,
-  "created_at": "2024-03-13T15:00:00Z"
+  "created_at": "2024-03-13T15:00:00Z",
+  "updated_at": "2024-03-13T15:00:00Z"
 }
 ```
 
-> O campo `sent_at` é preenchido pelo worker ARQ quando o push é efetivamente enviado.
+> O campo `sent_at` é preenchido pelo worker ARQ quando o push é efetivamente enviado.  
+> O worker deve estar rodando: `arq app.worker.WorkerSettings`
 
 ---
 
-## ⏳ 🟡 Avisos — Detalhe e Leitura
+## ✅ Nomes de Bebê
 
-Complementam os endpoints de listagem/criação já entregues na v1.
-
-### `GET /clinics/{clinic_id}/announcements/{announcement_id}`
-
-**Resposta 200:** objeto `AnnouncementResponse` completo (incluindo `full_description`)
-
-**Erros:** `404` se não encontrado ou expirado
-
-### `PATCH /clinics/{clinic_id}/announcements/{announcement_id}/read`
-
-Marca o aviso como lido para o usuário autenticado. Cria registro na tabela pivot `user_announcement_reads`.
-
-**Resposta 200:**
-```json
-{ "read": true, "read_at": "2024-03-15T09:30:00Z" }
-```
-
-**Integração no app:**
-```ts
-// Ao abrir detalhe do aviso:
-const detail = await api.get(`/clinics/${clinicId}/announcements/${announcementId}`);
-await api.patch(`/clinics/${clinicId}/announcements/${announcementId}/read`);
-```
-
----
-
-## ⏳ 🔵 Nomes de Bebê
-
-**Tela mobile:** `NomesScreen` — stub atual  
-**Modelos necessários:** `BabyName`, `PatientBabyNameFavorite` (nova migration + seed)
+**Tela mobile:** `NomesScreen`  
+**Migration:** `d1e2f3a4b5c6`  
+**Seed:** `python alembic/seeds/baby_names.py` — 203 nomes (femininos, masculinos, neutros)
 
 ### `GET /baby-names`
 
@@ -565,7 +433,7 @@ await api.patch(`/clinics/${clinicId}/announcements/${announcementId}/read`);
 **Resposta 200:**
 ```json
 {
-  "total": 250,
+  "total": 203,
   "limit": 20,
   "offset": 0,
   "data": [
@@ -574,58 +442,90 @@ await api.patch(`/clinics/${clinicId}/announcements/${announcementId}/read`);
       "name": "Sofia",
       "gender": "female",
       "origin": "Grego",
-      "meaning": "Sabedoria",
-      "popularity_score": 92,
-      "trend": "rising"
+      "meaning": "sabedoria",
+      "popularity_score": 95,
+      "trend": "rising",
+      "is_favorite": false,
+      "created_at": "...",
+      "updated_at": "..."
     }
   ]
 }
 ```
 
+> O campo `is_favorite` é preenchido automaticamente para usuários com role `patient`.
+
+Valores válidos para `gender`: `male` · `female` · `neutral`  
 Valores válidos para `trend`: `rising` · `stable` · `declining`
 
 ### `POST /patients/{patient_id}/baby-names/{name_id}/favorite`
 
-**Resposta 201:** `{ "favorited": true }`
+**Resposta 201:**
+```json
+{
+  "patient_id": "<uuid>",
+  "baby_name_id": "<uuid>",
+  "message": "Adicionado aos favoritos"
+}
+```
+
+**Erros:** `409 CONFLICT` se já estiver nos favoritos
 
 ### `DELETE /patients/{patient_id}/baby-names/{name_id}/favorite`
 
-**Resposta 204:** No Content
+**Resposta 204:** No Content  
+**Erros:** `404` se o favorito não existir
 
 ### `GET /patients/{patient_id}/baby-names/favorites`
 
-**Resposta 200:** mesma estrutura de `GET /baby-names`, filtrado pelos favoritos da paciente
+**Resposta 200:** mesma estrutura de `GET /baby-names`, com `is_favorite: true` em todos os itens
 
-> **Nota para integração:** carregar a lista de favoritos junto com `GET /baby-names` e marcar localmente quais estão favoritados para evitar requisição por nome.
+**Integração no app:**
+```ts
+// Carregar lista com favoritos já marcados (para usuário patient):
+const { data } = await api.get('/baby-names?limit=50');
+// data.data[n].is_favorite já vem preenchido pelo backend
+
+// Favoritar um nome:
+await api.post(`/patients/${patientId}/baby-names/${nameId}/favorite`);
+
+// Desfavoritar:
+await api.delete(`/patients/${patientId}/baby-names/${nameId}/favorite`);
+```
 
 ---
 
-## ⏳ 🔵 Desenvolvimento Fetal
+## ✅ Desenvolvimento Fetal
 
-**Tela mobile:** `Feto3DScreen` — stub atual  
-**Modelo necessário:** `FetalDevelopment` (migration + seed de 42 semanas)
+**Tela mobile:** `Feto3DScreen`  
+**Migration:** `d1e2f3a4b5c6`  
+**Seed:** `python alembic/seeds/fetal_development.py` — semanas 1 a 42  
+**Auth:** não requer autenticação
 
 ### `GET /fetal-development/{week}`
 
-Sem autenticação obrigatória. `week` deve ser entre 1 e 42.
+`week` deve ser inteiro entre 1 e 42.
 
 **Resposta 200:**
 ```json
 {
+  "id": "<uuid>",
   "week": 24,
   "size_cm": 30.0,
-  "weight_g": 600,
-  "description": "O bebê já abre e fecha os olhos. Pode ouvir sua voz.",
+  "weight_g": 600.0,
+  "description": "Os olhos se abrem pela primeira vez! O bebê responde à luz.",
   "highlights": [
-    { "id": "lungs", "label": "Pulmões", "description": "Em desenvolvimento acelerado." },
-    { "id": "hearing", "label": "Audição", "description": "Já responde a sons externos." }
+    { "id": "1", "label": "Olhos abertos", "description": "Pálpebras se abrem e fecham." },
+    { "id": "2", "label": "Resposta à luz", "description": "Bebê reage a lanterna sobre o abdômen." }
   ],
   "image_url": null,
-  "model_url": null
+  "model_url": null,
+  "created_at": "...",
+  "updated_at": "..."
 }
 ```
 
-**Erros:** `404` se `week < 1` ou `week > 42`
+**Erros:** `404` se `week < 1`, `week > 42` ou semana não encontrada no banco
 
 **Integração no app:**
 ```ts
@@ -640,19 +540,172 @@ const { data } = useQuery({
 
 ---
 
+## ✅ Chat / Mensagens — WebSocket + HTTP
+
+**Tela mobile:** `ChatScreen`  
+**Migration:** `e1f2a3b4c5d6`  
+**Arquitetura:** WebSocket nativo FastAPI + Redis Pub/Sub por conexão
+
+### `GET /patients/{patient_id}/messages`
+
+Lista histórico paginado. Use `before_id` para carregar mensagens mais antigas (cursor reverso).
+
+**Query params:**
+| Param | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `limit` | int | 30 | — |
+| `offset` | int | 0 | — |
+| `before_id` | uuid | — | Retorna mensagens anteriores a este ID (cursor) |
+
+**Resposta 200:**
+```json
+{
+  "total": 45,
+  "limit": 30,
+  "offset": 0,
+  "data": [
+    {
+      "id": "<uuid>",
+      "patient_id": "<uuid>",
+      "sender_id": "<uuid>",
+      "sender_role": "doctor",
+      "content": "Seus exames estão ótimos!",
+      "read": false,
+      "created_at": "2024-03-15T10:00:00Z",
+      "updated_at": "2024-03-15T10:00:00Z"
+    }
+  ]
+}
+```
+
+Valores válidos para `sender_role`: `patient` · `doctor` · `secretary` · `system`
+
+### `POST /patients/{patient_id}/messages`
+
+Envia mensagem via HTTP (fallback offline ou notificação sem WS ativo). Também publica no canal Redis.
+
+**Body:**
+```json
+{ "content": "Dra, tenho uma dúvida sobre a dieta." }
+```
+
+**Resposta 201:** objeto `MessageResponse`
+
+### `PATCH /patients/{patient_id}/messages/read`
+
+Marca todas as mensagens não lidas da conversa como lidas.
+
+**Resposta 204:** No Content
+
+---
+
+### WebSocket — Tempo real
+
+#### `WS /patients/{patient_id}/ws/chat?token=<access_token>`
+
+> O header `Authorization` não é suportado em conexões WebSocket. O token JWT deve ir no query param `token`.
+
+**Protocolo:**
+
+1. App abre conexão: `ws://<host>/api/v1/patients/<uuid>/ws/chat?token=<jwt>`
+2. Servidor valida JWT, registra conexão no `ConnectionManager` e subscreve no canal Redis `chat:<patient_id>`
+3. App envia mensagem:
+```json
+{ "content": "Olá Dra., tudo bem?" }
+```
+4. Servidor persiste no banco → publica no Redis → todos os clientes conectados ao mesmo `patient_id` recebem em tempo real
+5. Todos os clientes recebem (formato `MessageResponse`):
+```json
+{
+  "id": "<uuid>",
+  "patient_id": "<uuid>",
+  "sender_id": "<uuid>",
+  "sender_role": "patient",
+  "content": "Olá Dra., tudo bem?",
+  "read": false,
+  "created_at": "2024-03-15T10:05:00Z",
+  "updated_at": "2024-03-15T10:05:00Z"
+}
+```
+6. App deve reconectar automaticamente ao perder conexão (back-off exponencial recomendado)
+
+**Código de erro WS:** `4001` = token inválido ou expirado
+
+**Integração no app:**
+```ts
+const ws = new WebSocket(
+  `${WS_BASE_URL}/patients/${patientId}/ws/chat?token=${accessToken}`
+);
+
+ws.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+  setMessages(prev => [message, ...prev]);
+};
+
+ws.onclose = (event) => {
+  if (event.code === 4001) return; // Token inválido — não reconectar
+  setTimeout(() => openChat(), 3000); // Reconectar após 3s
+};
+
+const sendMessage = (content: string) => {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ content }));
+  } else {
+    // Fallback: enviar via HTTP
+    api.post(`/patients/${patientId}/messages`, { content });
+  }
+};
+```
+
+**Teste via CLI:**
+```bash
+wscat -c "ws://localhost:8000/api/v1/patients/<uuid>/ws/chat?token=<jwt>"
+# Enviar: {"content":"Olá Dra."}
+```
+
+---
+
+## ✅ Avisos — Detalhe e Leitura
+
+**Migration:** `e1f2a3b4c5d6` (tabela `user_announcement_reads`)  
+Complementam os endpoints de listagem/criação já entregues na v1.
+
+### `GET /clinics/{clinic_id}/announcements/{announcement_id}`
+
+**Resposta 200:** objeto `AnnouncementResponse` completo (incluindo `full_description` e campo `is_new`)
+
+**Erros:** `404` se não encontrado
+
+### `PATCH /clinics/{clinic_id}/announcements/{announcement_id}/read`
+
+Marca o aviso como lido para o usuário autenticado. Cria registro em `user_announcement_reads`.  
+Idempotente — chamadas repetidas não duplicam.
+
+**Resposta 204:** No Content
+
+**Integração no app:**
+```ts
+// Ao abrir o detalhe do aviso:
+const detail = await api.get(`/clinics/${clinicId}/announcements/${announcementId}`);
+await api.patch(`/clinics/${clinicId}/announcements/${announcementId}/read`);
+```
+
+---
+
 ## Resumo de status
 
-| Feature | Status | Migration | Rotas |
-|---|---|---|---|
-| Exames laboratoriais | ✅ | `b1c2d3e4f5a6` | 3 |
-| Medicamentos | ✅ | `b1c2d3e4f5a6` | 3 |
-| Agendamento por paciente | ✅ | — | 1 |
-| Relatório diário | ✅ | — | 1 |
-| Onboarding flag | ✅ | `b1c2d3e4f5a6` | 1 |
-| Push token | ✅ | `b1c2d3e4f5a6` | 1 |
-| Chat WebSocket | ⏳ | pendente | 3 + WS |
-| Notificações | ⏳ | pendente | 2 |
-| Lembretes | ⏳ | pendente | 1 |
-| Avisos (detalhe/lido) | ⏳ | pendente | 2 |
-| Nomes de bebê | ⏳ | pendente + seed | 4 |
-| Desenvolvimento fetal | ⏳ | pendente + seed | 1 |
+| Feature | Status | Migration | Worker | Seed | Rotas |
+|---|---|---|---|---|---|
+| Exames laboratoriais | ✅ | `b1c2d3e4f5a6` | — | — | 3 |
+| Medicamentos | ✅ | `b1c2d3e4f5a6` | — | — | 3 |
+| Agendamento por paciente | ✅ | — | — | — | 1 |
+| Relatório diário | ✅ | — | — | — | 1 |
+| Onboarding flag | ✅ | `b1c2d3e4f5a6` | — | — | 1 |
+| Push token | ✅ | `b1c2d3e4f5a6` | — | — | 1 |
+| Notificações | ✅ | `c1d2e3f4a5b6` | `send_push_notification` | — | 2 |
+| Lembretes | ✅ | `c1d2e3f4a5b6` | `send_reminder` | — | 1 |
+| Nomes de bebê | ✅ | `d1e2f3a4b5c6` | — | ✅ 203 nomes | 4 |
+| Desenvolvimento fetal | ✅ | `d1e2f3a4b5c6` | — | ✅ 42 semanas | 1 |
+| Chat WebSocket | ✅ | `e1f2a3b4c5d6` | — | — | 3 + WS |
+| Avisos (detalhe/lido) | ✅ | `e1f2a3b4c5d6` | — | — | 2 |
+| **Total** | **12 / 12** | | | | **23 rotas** |

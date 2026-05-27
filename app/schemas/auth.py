@@ -15,3 +15,10 @@ class TokenPayload(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(..., description="Endereço de email cadastrado do usuário.", examples=["maria@clinic.com"])
     password: str = Field(..., description="Senha secreta correspondente à conta.", examples=["senha_segura123"])
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(..., description="Token JWT de atualização obtido no login.", examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
+
+class AccessTokenResponse(BaseModel):
+    access_token: str = Field(..., description="Novo token JWT de acesso (curta duração).", examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
+    token_type: str = Field("bearer", description="Esquema de autenticação utilizado.", examples=["bearer"])

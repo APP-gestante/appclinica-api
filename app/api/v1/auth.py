@@ -3,9 +3,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.api.dependencies import get_db, get_current_user
-from app.core.security import verify_password, create_access_token, create_refresh_token
+import jwt
+from app.core.security import verify_password, create_access_token, create_refresh_token, ALGORITHM
+from app.core.config import settings
 from app.models.user import User
-from app.schemas.auth import LoginRequest, Token
+from app.schemas.auth import LoginRequest, Token, RefreshRequest, AccessTokenResponse
 from app.schemas.user import UserResponse
 
 router = APIRouter()
@@ -53,6 +55,38 @@ async def login(
         "token_type": "bearer",
         "user": user
     }
+
+@router.post("/refresh", response_model=AccessTokenResponse)
+async def refresh_token(request: RefreshRequest):
+    """
+    **Renovar o token de acesso usando o refresh token.**
+
+    Permite que o cliente obtenha um novo `access_token` sem exigir nova autenticação com email e senha. O `refresh_token` deve ter sido obtido originalmente via `/auth/login`.
+
+    ### 📌 Requisitos de Segurança
+    * Rota **Pública** — não requer `Authorization` header.
+    * O `refresh_token` deve conter o campo `"type": "refresh"` no payload.
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Novo `access_token` gerado com sucesso.
+    * **`401 UNAUTHORIZED`**: Token inválido, expirado ou não é do tipo refresh.
+    """
+    try:
+        payload = jwt.decode(request.refresh_token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token is not a refresh token")
+
+    subject = payload.get("sub")
+    role = payload.get("role")
+    if not subject or not role:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+
+    access_token = create_access_token(subject=subject, role=role)
+    return {"access_token": access_token, "token_type": "bearer"}
+
 
 @router.post("/logout")
 async def logout(current_user: User = Depends(get_current_user)):

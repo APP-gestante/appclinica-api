@@ -70,43 +70,44 @@ async def list_contractions(
     return {"total": total, "limit": limit, "offset": offset, "data": items}
 
 @router.get("/{patient_id}/contractions/stats")
-async def get_contractions_stats(patient_id: UUID):
+async def get_contractions_stats(
+    patient_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     **Obter estatísticas agregadas sobre as contrações registradas.**
 
-    *(Dados simulados/Mock)*
-    Retorna métricas úteis baseadas no histórico recente da gestante, como duração média das contrações e frequência, para ajudar na tomada de decisão sobre ir à maternidade.
+    Retorna métricas calculadas sobre o histórico real da gestante: total de contrações, duração média e intervalo médio.
 
     ### 📌 Requisitos de Segurança
     * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
 
-    ### 📥 Parâmetros de Entrada
-    * `patient_id` *(UUID, na URL)*: Identificador da paciente.
-
     ### 📤 Retornos esperados
-    * **`200 OK`**: Métricas agregadas (total de contrações, duração média em segundos, etc.).
+    * **`200 OK`**: Métricas agregadas em tempo real.
     * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
     """
-    return {"patient_id": patient_id, "total_contractions": 12, "average_duration_seconds": 47}
+    return await crud_vitals.get_contractions_stats(db, patient_id=patient_id)
 
 @router.delete("/{patient_id}/contractions/session", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_contraction_session(patient_id: UUID):
+async def delete_contraction_session(
+    patient_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     **Limpar o histórico de contrações da sessão do dia.**
 
-    *(Dados simulados/Mock)*
-    Permite descartar registros de um falso alarme de trabalho de parto ou iniciar uma nova contagem limpa.
+    Realiza soft-delete em todas as contrações registradas no dia corrente para a paciente especificada.
 
     ### 📌 Requisitos de Segurança
     * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
-
-    ### 📥 Parâmetros de Entrada
-    * `patient_id` *(UUID, na URL)*: Identificador da paciente.
 
     ### 📤 Retornos esperados
     * **`204 NO CONTENT`**: Descarte efetuado com sucesso. Sem corpo de retorno.
     * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
     """
+    await crud_vitals.delete_contractions_session(db, patient_id=patient_id)
     return None
 
 # --- Glucose ---
@@ -167,42 +168,45 @@ async def list_glucose_readings(
     return {"total": total, "limit": limit, "offset": offset, "data": items}
 
 @router.get("/{patient_id}/glucose-readings/stats")
-async def get_glucose_stats(patient_id: UUID):
+async def get_glucose_stats(
+    patient_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     **Obter estatísticas consolidadas das leituras de glicose.**
 
-    *(Dados simulados/Mock)*
-    Retorna métricas como a média de açúcar no sangue, menor e maior valores lidos, e status consolidado para acompanhamento de diabetes gestacional.
+    Retorna métricas calculadas sobre os dados reais: total de leituras, média, mínimo, máximo e última leitura.
 
     ### 📌 Requisitos de Segurança
     * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
 
     ### 📤 Retornos esperados
-    * **`200 OK`**: Métricas de glicose (total de leituras, média, status).
+    * **`200 OK`**: Métricas de glicose em tempo real.
     * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
     """
-    return {"patient_id": patient_id, "total_readings": 15, "average": 92}
+    return await crud_vitals.get_glucose_stats(db, patient_id=patient_id)
 
 @router.get("/{patient_id}/glucose-readings/chart")
-async def get_glucose_chart(patient_id: UUID, days: int = 30):
+async def get_glucose_chart(
+    patient_id: UUID,
+    days: int = Query(30, ge=1, le=365, description="Janela temporal em dias para o gráfico"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
-    **Obter dados estruturados para a renderização de gráficos de glicose.**
+    **Obter dados estruturados para renderização de gráficos de glicose.**
 
-    *(Dados simulados/Mock)*
-    Retorna arrays otimizados para desenhar curvas de evolução glicêmica em elementos visuais (Canvas/SVG), incluindo limites de normalidade recomendados.
+    Retorna série temporal real das leituras de glicose no intervalo especificado.
 
     ### 📌 Requisitos de Segurança
     * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
 
-    ### 📥 Parâmetros de Entrada
-    * `patient_id` *(UUID, na URL)*: Identificador da paciente.
-    * `days` *(int, opcional, query)*: Intervalo de dias para o gráfico (padrão: 30 dias).
-
     ### 📤 Retornos esperados
-    * **`200 OK`**: Estrutura contendo a lista cronológica de valores e os limites (`normal_limit`, `hypertension_limit`).
+    * **`200 OK`**: Série temporal com limites clínicos (`normal_limit`, `hypertension_limit`).
     * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
     """
-    return {"data": [], "normal_limit": 95, "hypertension_limit": 126}
+    return await crud_vitals.get_glucose_chart(db, patient_id=patient_id, days=days)
 
 # --- Blood Pressure ---
 @router.post("/{patient_id}/blood-pressure", response_model=BloodPressureResponse, status_code=status.HTTP_201_CREATED)
@@ -263,39 +267,42 @@ async def list_blood_pressure_readings(
     return {"total": total, "limit": limit, "offset": offset, "data": items}
 
 @router.get("/{patient_id}/blood-pressure/stats")
-async def get_blood_pressure_stats(patient_id: UUID):
+async def get_blood_pressure_stats(
+    patient_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
-    **Obter estatísticas consolidadas e análise de risco para pressão arterial.**
+    **Obter estatísticas consolidadas de pressão arterial.**
 
-    *(Dados simulados/Mock)*
-    Retorna as médias sistólicas/diastólicas calculadas e uma sinalização de alerta para risco de hipertensão gestacional.
+    Retorna médias sistólicas/diastólicas calculadas e última leitura registrada em tempo real.
 
     ### 📌 Requisitos de Segurança
     * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
 
     ### 📤 Retornos esperados
-    * **`200 OK`**: Resumo de dados de pressão (total de leituras, médias, classificação e nível de risco).
+    * **`200 OK`**: Resumo calculado sobre dados reais.
     * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
     """
-    return {"patient_id": patient_id, "total_readings": 10, "average_systolic": 118, "average_diastolic": 78}
+    return await crud_vitals.get_blood_pressure_stats(db, patient_id=patient_id)
 
 @router.get("/{patient_id}/blood-pressure/chart")
-async def get_blood_pressure_chart(patient_id: UUID, days: int = 30):
+async def get_blood_pressure_chart(
+    patient_id: UUID,
+    days: int = Query(30, ge=1, le=365, description="Janela temporal em dias para o gráfico"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
-    **Obter dados estruturados para renderização de gráficos de pressão arterial.**
+    **Obter dados para gráfico de linhas duplas de pressão arterial.**
 
-    *(Dados simulados/Mock)*
-    Gera conjuntos de coordenadas ordenados cronologicamente contendo sistólica e diastólica para desenho de gráficos de linhas duplas.
+    Retorna série temporal real de sistólica e diastólica com limites clínicos.
 
     ### 📌 Requisitos de Segurança
     * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
 
-    ### 📥 Parâmetros de Entrada
-    * `patient_id` *(UUID, na URL)*: Identificador da paciente.
-    * `days` *(int, opcional, query)*: Janela temporal em dias para o gráfico.
-
     ### 📤 Retornos esperados
-    * **`200 OK`**: Dados para gráfico incluindo os limites clínicos recomendados (`normal_systolic`, `normal_diastolic`, `hypertension_limit`).
+    * **`200 OK`**: Série temporal com `hypertension_limit`, `normal_systolic` e `normal_diastolic`.
     * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
     """
-    return {"data": [], "hypertension_limit": 140, "normal_systolic": 120, "normal_diastolic": 80}
+    return await crud_vitals.get_blood_pressure_chart(db, patient_id=patient_id, days=days)

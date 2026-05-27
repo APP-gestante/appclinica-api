@@ -47,6 +47,42 @@ class PatientCreate(CoreModel):
 class PatientResponse(PatientCreate, BaseEntitySchema):
     user_id: UUID = Field(..., description="Identificador único do usuário associado a este perfil de paciente.")
     current_week: Optional[int] = Field(None, description="Idade gestacional calculada dinamicamente em semanas.", examples=[24])
-    
+
+class PatientUpdate(CoreModel):
+    height_cm: Optional[str] = Field(None, description="Altura em centímetros.", examples=["165"])
+    weight_initial_kg: Optional[str] = Field(None, description="Peso inicial em kg.", examples=["62.5"])
+    imc: Optional[str] = Field(None, description="Índice de Massa Corporal.", examples=["22.9"])
+    blood_type: Optional[str] = Field(None, description="Grupo sanguíneo e fator Rh.", examples=["O+"])
+    acompanhante: Optional[str] = Field(None, description="Nome do acompanhante.", examples=["João da Silva"])
+    hospital: Optional[str] = Field(None, description="Maternidade escolhida.", examples=["Hospital Maternidade Santa Joana"])
+    risk_level: Optional[str] = Field(None, description="Nível de risco (low, medium, high).", examples=["low"])
+    number_of_fetuses: Optional[int] = Field(None, description="Número de fetos.", examples=[1])
+    parity: Optional[str] = Field(None, description="Paridade (ex: G1P0).", examples=["G1P0"])
+    cesarean_predicted: Optional[bool] = Field(None, description="Previsão de cesárea.", examples=[False])
+
+class PatientDetailResponse(PatientResponse):
+    user: UserResponse = Field(..., description="Dados do usuário associado.")
+
+class PatientListItemResponse(CoreModel):
+    id: UUID = Field(..., description="ID do perfil de paciente.")
+    user_id: UUID
+    prontuario: str
+    current_week: Optional[int] = None
+    edd: date
+    risk_level: str
+    user: UserResponse
+
+class PatientListResponse(CoreModel):
+    total: int
+    limit: int
+    offset: int
+    data: list[PatientListItemResponse]
+
+class ProntuarioResponse(CoreModel):
+    patient_id: UUID
+    dados_clinicos: PatientResponse
+    user: UserResponse
+    updated_at: Optional[date] = None
+
 # -- Clinic schemas moved to clinic.py --
 

@@ -1,66 +1,147 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, Query, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Any
 
-from app.api.dependencies import get_db, get_current_user
+from app.api.dependencies import get_db, get_current_user, require_role
 from app.models.user import User
-from app.schemas.exams import UltrasoundCreate, UltrasoundResponse
+from app.crud import exams as crud_exams
+from app.schemas.exams import (
+    UltrasoundCreate,
+    UltrasoundResponse,
+    UltrasoundListResponse,
+    VaccineCreate,
+    VaccineUpdate,
+    VaccineResponse,
+    VaccineListResponse,
+)
 
 router = APIRouter()
 
-@router.post("/{patient_id}/ultrasounds", response_model=UltrasoundResponse, status_code=status.HTTP_201_CREATED)
+
+# ---------------------------------------------------------------------------
+# Ultrassom
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/{patient_id}/ultrasounds",
+    response_model=UltrasoundResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_ultrasound(
     patient_id: UUID,
     obj_in: UltrasoundCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(["doctor", "admin"])),
 ):
     """
-    **Registrar um laudo de exame de ultrassonografia (USG) obstétrica.**
-
-    *(Dados simulados/Mock)*
-    Este endpoint permite aos médicos ou assistentes cadastrarem os parâmetros e diagnósticos coletados durante um exame de ultrassom de acompanhamento gestacional.
+    **Registrar laudo de ultrassonografia (USG) obstétrica.**
 
     ### 📌 Requisitos de Segurança
-    * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
-
-    ### 📥 Parâmetros de Entrada
-    * `patient_id` *(UUID, na URL)*: Identificador da paciente gestante.
-    * `type` *(string, obrigatório, no corpo)*: Tipo da ultrassonografia (`obstetric`, `morphology`, `detailed`).
-    * `date` *(date, obrigatório, no corpo)*: Data de realização do exame (`YYYY-MM-DD`).
-    * `ig_weeks` *(int, obrigatório, no corpo)*: Idade gestacional estimada no momento do exame em semanas.
-    * `presentation` *(string, opcional, no corpo)*: Apresentação fetal (`cephalic` (cefálica), `breech` (pélvica), `transverse` (transversa)).
-    * `placenta_location` *(string, opcional, no corpo)*: Localização da placenta (ex: `anterior`, `posterior`).
-    * `amniotic_fluid_ml` *(float, opcional, no corpo)*: Volume estimado de líquido amniótico em mililitros.
-    * `fetal_heart_rate` *(int, opcional, no corpo)*: Frequência cardíaca fetal medida em batimentos por minuto (bpm).
+    * RBAC: `doctor`, `admin`.
 
     ### 📤 Retornos esperados
-    * **`201 CREATED`**: Detalhes do exame de ultrassom cadastrado com sucesso.
-    * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
+    * **`201 CREATED`**: Laudo persistido com sucesso.
+    * **`401 UNAUTHORIZED`**: Token inválido ou expirado.
     """
-    return {**obj_in.model_dump(), "id": "123e4567-e89b-12d3-a456-426614174000", "patient_id": patient_id, "doctor_id": current_user.id, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
+    return await crud_exams.create_ultrasound(
+        db, patient_id=patient_id, doctor_id=current_user.id, obj_in=obj_in
+    )
 
-@router.get("/{patient_id}/ultrasounds")
+
+@router.get("/{patient_id}/ultrasounds", response_model=UltrasoundListResponse)
 async def list_ultrasounds(
     patient_id: UUID,
+    limit: int = Query(20, ge=1, le=100, description="Registros por página"),
+    offset: int = Query(0, ge=0, description="Offset de paginação"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
-    **Listar o histórico de exames de ultrassom da gestante.**
-
-    *(Dados simulados/Mock)*
-    Recupera a lista de laudos de ultrassonografias realizadas para fins de consulta histórica e análise comparativa do crescimento fetal.
+    **Listar histórico de ultrassonografias da paciente.**
 
     ### 📌 Requisitos de Segurança
     * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
 
-    ### 📥 Parâmetros de Entrada
-    * `patient_id` *(UUID, na URL)*: Identificador único universal da paciente gestante.
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Lista paginada de ultrassons reais do banco de dados.
+    """
+    total, items = await crud_exams.get_ultrasounds(
+        db, patient_id=patient_id, skip=offset, limit=limit
+    )
+    return {"total": total, "limit": limit, "offset": offset, "data": items}
+
+
+# ---------------------------------------------------------------------------
+# Vacinas
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/{patient_id}/vaccines",
+    response_model=VaccineResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_vaccine(
+    patient_id: UUID,
+    obj_in: VaccineCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["doctor", "admin"])),
+):
+    """
+    **Registrar vacina ou agendamento de vacinação.**
+
+    ### 📌 Requisitos de Segurança
+    * RBAC: `doctor`, `admin`.
 
     ### 📤 Retornos esperados
-    * **`200 OK`**: Retorna uma estrutura contendo a contagem total e a lista detalhada de exames de ultrassom da paciente.
-    * **`401 UNAUTHORIZED`**: Token de acesso inválido ou expirado.
+    * **`201 CREATED`**: Vacina registrada com sucesso.
     """
-    return {"total": 0, "data": []}
+    return await crud_exams.create_vaccine(
+        db, patient_id=patient_id, doctor_id=current_user.id, obj_in=obj_in
+    )
+
+
+@router.get("/{patient_id}/vaccines", response_model=VaccineListResponse)
+async def list_vaccines(
+    patient_id: UUID,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    **Listar cartão de vacinação da paciente.**
+
+    ### 📌 Requisitos de Segurança
+    * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Lista paginada de vacinas.
+    """
+    total, items = await crud_exams.get_vaccines(
+        db, patient_id=patient_id, skip=offset, limit=limit
+    )
+    return {"total": total, "limit": limit, "offset": offset, "data": items}
+
+
+@router.patch("/vaccines/{vaccine_id}", response_model=VaccineResponse)
+async def update_vaccine(
+    vaccine_id: UUID,
+    obj_in: VaccineUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["doctor", "admin"])),
+):
+    """
+    **Atualizar status ou reações de uma vacina.**
+
+    ### 📌 Requisitos de Segurança
+    * RBAC: `doctor`, `admin`.
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Vacina atualizada.
+    * **`404 NOT FOUND`**: Vacina não encontrada.
+    """
+    vaccine = await crud_exams.get_vaccine(db, vaccine_id=vaccine_id)
+    if not vaccine:
+        raise HTTPException(status_code=404, detail="Vaccine not found")
+    return await crud_exams.update_vaccine(db, vaccine=vaccine, obj_in=obj_in)

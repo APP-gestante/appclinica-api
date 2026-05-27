@@ -101,6 +101,7 @@ Content-Type: application/json
 | **doctor** | Ler/editar dados de pacientes, criar/atualizar registros clínicos, agenda |
 | **secretary** | Criar agendamentos, cadastrar pacientes, enviar lembretes, relatórios |
 | **admin** | Gerenciar clínica, usuários, configurações |
+| **superadmin** | Controle global: cadastrar/gerenciar clínicas e administradores globais |
 
 ---
 
@@ -1957,6 +1958,46 @@ Guardar nome nos favoritos.
 }
 ```
 
+#### GET `/api/v1/superadmin/clinics`
+Listar todas as clínicas do sistema.
+**Restrição:** Superadmin apenas.
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": "clinic_456",
+    "name": "Clínica Lunna",
+    "email": "contato@lunnaclinica.com",
+    "created_at": "2024-01-10T10:00:00Z"
+  }
+]
+```
+
+#### POST `/api/v1/superadmin/clinics`
+Cadastrar nova clínica e seu administrador inicial.
+**Restrição:** Superadmin apenas.
+
+**Request:**
+```json
+{
+  "name": "Nova Clínica",
+  "email": "contato@novaclinica.com",
+  "admin_email": "admin@novaclinica.com",
+  "admin_name": "Admin Principal",
+  "admin_password": "senha_segura"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": "clinic_789",
+  "name": "Nova Clínica",
+  "created_at": "2024-02-15T10:00:00Z"
+}
+```
+
 ---
 
 ### 10. CONFIGURAÇÕES DO SISTEMA
@@ -2031,7 +2072,7 @@ interface User {
   email: string;
   name: string;
   password_hash: string; // armazenar com hash bcrypt
-  role: "patient" | "doctor" | "secretary" | "admin";
+  role: "patient" | "doctor" | "secretary" | "admin" | "superadmin";
   clinic_id: string;
   avatar_url?: string;
   phone?: string;

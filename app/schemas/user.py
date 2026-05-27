@@ -48,20 +48,5 @@ class PatientResponse(PatientCreate, BaseEntitySchema):
     user_id: UUID = Field(..., description="Identificador único do usuário associado a este perfil de paciente.")
     current_week: Optional[int] = Field(None, description="Idade gestacional calculada dinamicamente em semanas.", examples=[24])
     
-# -- Clinic --
+# -- Clinic schemas moved to clinic.py --
 
-class ClinicBase(CoreModel):
-    name: str = Field(..., description="Nome da clínica de obstetrícia / parceira white-label.", examples=["Clínica Lunna"])
-    logo_url: Optional[str] = Field(None, description="URL do logotipo personalizado da clínica.", examples=["https://lunnaclinica.com/logo.png"])
-    primary_color: Optional[str] = Field(None, description="Código hexadecimal da cor primária da marca no aplicativo móvel.", examples=["#8DAA91"])
-    secondary_color: Optional[str] = Field(None, description="Código hexadecimal da cor secundária da marca no aplicativo móvel.", examples=["#E5987D"])
-    address: Optional[str] = Field(None, description="Endereço físico completo da clínica.", examples=["Av. Paulista, 1000 - Bela Vista, São Paulo - SP"])
-    phone: Optional[str] = Field(None, description="Telefone de contato da clínica.", examples=["(11) 3000-0000"])
-    email: Optional[EmailStr] = Field(None, description="Endereço de email institucional da clínica.", examples=["contato@lunnaclinica.com"])
-    website: Optional[str] = Field(None, description="Endereço eletrônico (site oficial) da clínica.", examples=["https://lunnaclinica.com"])
-
-class ClinicCreate(ClinicBase):
-    pass
-
-class ClinicResponse(ClinicBase, BaseEntitySchema):
-    pass

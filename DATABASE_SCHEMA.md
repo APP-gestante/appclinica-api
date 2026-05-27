@@ -969,7 +969,7 @@ CREATE TABLE audit_log (
 -- 1. CREATE CUSTOM TYPES (ENUMS)
 -- ============================================
 
-CREATE TYPE user_role AS ENUM ('patient', 'doctor', 'secretary', 'admin');
+CREATE TYPE user_role AS ENUM ('patient', 'doctor', 'secretary', 'admin', 'superadmin');
 CREATE TYPE appointment_status AS ENUM ('pending', 'confirmed', 'completed', 'cancelled');
 CREATE TYPE patient_appointment_status AS ENUM ('pending', 'confirmed', 'reschedule_requested', 'reschedule_approved');
 CREATE TYPE appointment_type AS ENUM ('routine', 'ultrasound', 'lab', 'follow_up', 'emergency');

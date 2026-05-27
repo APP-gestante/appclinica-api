@@ -1,6 +1,7 @@
 import enum
 
 class UserRole(str, enum.Enum):
+    superadmin = "superadmin"
     patient = "patient"
     doctor = "doctor"
     secretary = "secretary"

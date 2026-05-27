@@ -6,7 +6,8 @@ from fastapi_cache.decorator import cache
 from app.api.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.crud import user as crud_user
-from app.schemas.user import UserResponse, UserUpdate, ClinicResponse, UserCreate
+from app.schemas.clinic import ClinicResponse
+from app.schemas.user import UserResponse, UserUpdate, UserCreate
 
 router = APIRouter()
 

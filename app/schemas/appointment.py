@@ -16,6 +16,10 @@ class AppointmentBase(CoreModel):
 class AppointmentCreate(AppointmentBase):
     patient_id: UUID = Field(..., description="Identificador único (UUID) da gestante/paciente.")
 
+class AppointmentCreateForPatient(AppointmentBase):
+    """Schema para criar consulta com patient_id vindo da URL (fluxo centrado na paciente)."""
+    doctor_id: UUID = Field(..., description="Identificador único (UUID) do médico responsável.")
+
 class AppointmentUpdate(CoreModel):
     status: Optional[AppointmentStatus] = Field(None, description="Status de andamento da consulta (pending, confirmed, completed, cancelled).")
     patient_status: Optional[PatientAppointmentStatus] = Field(None, description="Status de confirmação ou remarcação por parte do paciente (pending, confirmed, reschedule_requested, reschedule_approved).")

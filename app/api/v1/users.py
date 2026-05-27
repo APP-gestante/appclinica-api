@@ -8,6 +8,13 @@ from app.models.user import User
 from app.crud import user as crud_user
 from app.schemas.clinic import ClinicResponse
 from app.schemas.user import UserResponse, UserUpdate, UserCreate
+from pydantic import BaseModel as PydanticBaseModel
+
+class OnboardingUpdate(PydanticBaseModel):
+    completed: bool
+
+class PushTokenUpdate(PydanticBaseModel):
+    push_token: str
 
 router = APIRouter()
 
@@ -106,6 +113,64 @@ async def update_user(
         
     user = await crud_user.update_user(db, db_user=user, user_in=user_in)
     return user
+
+@router.patch("/{user_id}/onboarding", response_model=UserResponse)
+async def update_onboarding(
+    user_id: UUID,
+    body: OnboardingUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    **Marcar onboarding como concluído.**
+
+    Persiste o estado no banco para que o app não exiba o onboarding novamente ao trocar de dispositivo.
+
+    ### 📌 Requisitos de Segurança
+    * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Usuário atualizado com `onboarding_completed = true`.
+    * **`404 NOT FOUND`**: Usuário não encontrado.
+    """
+    user = await crud_user.get_user_by_id(db, user_id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.onboarding_completed = body.completed
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.patch("/{user_id}/push-token", response_model=UserResponse)
+async def update_push_token(
+    user_id: UUID,
+    body: PushTokenUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    **Registrar ou atualizar o Expo push token do dispositivo.**
+
+    Chamado pelo app após login bem-sucedido via `getExpoPushTokenAsync()`.
+
+    ### 📌 Requisitos de Segurança
+    * Requer cabeçalho HTTP **`Authorization: Bearer <access_token>`** válido.
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Token registrado com sucesso.
+    * **`404 NOT FOUND`**: Usuário não encontrado.
+    """
+    user = await crud_user.get_user_by_id(db, user_id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.push_token = body.push_token
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
 
 @router.get("/{user_id}/clinic", response_model=ClinicResponse)
 @cache(expire=300)  # Faz o cache dessa resposta no Redis por 5 minutos

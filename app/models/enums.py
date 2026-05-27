@@ -82,4 +82,36 @@ class AnnouncementCategory(str, enum.Enum):
 class MessageSenderType(str, enum.Enum):
     patient = "patient"
     doctor = "doctor"
+    secretary = "secretary"
     system = "system"
+
+class LabTestType(str, enum.Enum):
+    hemograma = "hemograma"
+    glicemia = "glicemia"
+    urina = "urina"
+    outros = "outros"
+
+class LabTestStatus(str, enum.Enum):
+    pending = "pending"
+    completed = "completed"
+    abnormal = "abnormal"
+
+class NotificationType(str, enum.Enum):
+    appointment_reminder = "appointment_reminder"
+    clinic_announcement = "clinic_announcement"
+    vital_alert = "vital_alert"
+
+class ReminderType(str, enum.Enum):
+    appointment = "appointment"
+    exam = "exam"
+    medication = "medication"
+
+class BabyNameGender(str, enum.Enum):
+    male = "male"
+    female = "female"
+    neutral = "neutral"
+
+class NameTrend(str, enum.Enum):
+    rising = "rising"
+    stable = "stable"
+    declining = "declining"

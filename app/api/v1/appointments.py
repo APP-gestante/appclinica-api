@@ -8,8 +8,8 @@ from app.models.user import User
 from app.models.enums import AppointmentStatus, PatientAppointmentStatus
 from app.crud import appointment as crud_appointment
 from app.schemas.appointment import (
-    AppointmentResponse, AppointmentCreate, AppointmentListResponse, 
-    AppointmentRescheduleRequest, AppointmentRescheduleApprove
+    AppointmentResponse, AppointmentCreate, AppointmentCreateForPatient,
+    AppointmentListResponse, AppointmentRescheduleRequest, AppointmentRescheduleApprove
 )
 
 router = APIRouter()
@@ -77,6 +77,31 @@ async def get_appointment(
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
     return appointment
+
+@router.post("/patients/{patient_id}/appointments", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED, tags=["appointments"])
+async def create_appointment_for_patient(
+    patient_id: UUID,
+    obj_in: AppointmentCreateForPatient,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["doctor", "secretary", "admin"])),
+):
+    """
+    **Criar consulta diretamente vinculada a uma paciente.**
+
+    Alternativa a `POST /doctors/{id}/appointments` — útil quando o fluxo parte da ficha da paciente.
+    O `patient_id` vem da URL; o `doctor_id` vem no body.
+
+    ### 📌 Requisitos de Segurança
+    * RBAC: `doctor`, `secretary`, `admin`.
+
+    ### 📤 Retornos esperados
+    * **`201 CREATED`**: Consulta agendada com sucesso.
+    """
+    full_obj = AppointmentCreate(patient_id=patient_id, **obj_in.model_dump())
+    return await crud_appointment.create_appointment(
+        db, doctor_id=obj_in.doctor_id, clinic_id=current_user.clinic_id, obj_in=full_obj
+    )
+
 
 @router.post("/doctors/{doctor_id}/appointments", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_appointment(

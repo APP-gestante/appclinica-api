@@ -73,11 +73,15 @@ async def run_async_migrations() -> None:
 
     """
 
+    # Use SSL only if DATABASE_URL specifies it (Supabase/Production)
+    # For local development, SSL is disabled
+    ssl_mode = "require" if "supabase" in settings.sqlalchemy_database_uri else False
+    
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        connect_args={"ssl": "require"},
+        connect_args={"ssl": ssl_mode},
     )
 
     async with connectable.connect() as connection:

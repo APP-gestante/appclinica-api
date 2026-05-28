@@ -39,6 +39,27 @@ async def seed_data():
             # Hash da senha padrão para todos os usuários de teste
             default_password_hash = get_password_hash("senha_segura123")
 
+            # 0. Criar Superadmin global (sem clinic_id)
+            sa_stmt = select(User).where(User.email == "superadmin@lunna.app")
+            result = await session.execute(sa_stmt)
+            superadmin_user = result.scalar_one_or_none()
+
+            if not superadmin_user:
+                print("Criando usuario Superadmin...")
+                superadmin_user = User(
+                    email="superadmin@lunna.app",
+                    password_hash=get_password_hash("Lunna@2026"),
+                    name="Lunna HQ",
+                    role=UserRole.superadmin,
+                    clinic_id=None,
+                    is_active=True,
+                    email_verified=True
+                )
+                session.add(superadmin_user)
+                print("Superadmin criado.")
+            else:
+                print("Superadmin ja cadastrado.")
+
             # 2. Criar Usuário Administrador
             admin_stmt = select(User).where(User.email == "admin@gerarvida.com")
             result = await session.execute(admin_stmt)

@@ -24,7 +24,7 @@ from app.core.config import settings
 from app.models.base import BaseModel
 import app.models  # Importa todos os modelos via __init__.py
 
-config.set_main_option("sqlalchemy.url", settings.sqlalchemy_database_uri)
+config.set_main_option("sqlalchemy.url", settings.sqlalchemy_database_uri.replace("%", "%%"))
 
 # add your model's MetaData object here
 # for 'autogenerate' support

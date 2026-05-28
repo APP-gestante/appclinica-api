@@ -89,6 +89,8 @@ All models inherit from `app/models/base.py::BaseModel` which provides UUID PK, 
 
 Defined in `UserRole`: `patient`, `doctor`, `secretary`, `admin`, `superadmin`. Enforce with `Depends(require_role(["doctor"]))` in route definitions.
 
+`superadmin` é o único role sem `clinic_id` — a coluna é nullable exatamente por isso (migration `f1a2b3c4d5e6`). `UserResponse.clinic_id` é `Optional[UUID]`.
+
 ### Schemas vs Models
 
 `app/schemas/` holds Pydantic v2 DTOs. Base classes in `app/schemas/base.py`:
@@ -160,6 +162,29 @@ REDIS_URL=redis://localhost:6379
 SECRET_KEY=<any-long-random-string>
 ```
 
+### Supabase (produção / staging)
+
+Usar o **session pooler** (`aws-1-sa-east-1.pooler.supabase.com:5432`), não a conexão direta (`db.<ref>.supabase.co:5432`).
+
+- A conexão direta resolve para IPv6 em algumas redes, causando timeout silencioso.
+- O transaction pooler (porta 6543) é incompatível com asyncpg (prepared statements). Usar porta 5432 do session pooler.
+- Senha com `@` deve ser URL-encoded: `@` → `%40` na DATABASE_URL.
+
+```
+DATABASE_URL=postgresql+asyncpg://postgres.<ref>:%40SuaSenha@aws-1-sa-east-1.pooler.supabase.com:5432/postgres
+```
+
+### Python version
+
+asyncpg não tem wheel para Python 3.14+. Usar **Python 3.12**:
+
+```bash
+brew install python@3.12
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
 ## Deployment
 
 The API deploys to **Vercel** via `vercel.json`. Docker Compose is for local dev — no PostgreSQL container (database lives on Supabase).
@@ -169,6 +194,11 @@ The ARQ worker must run as a **separate process** — Vercel serverless does not
 ## Key Gotchas
 
 - **Alembic SSL**: `alembic/env.py` uses `connect_args={"ssl": "require"}` — running migrations locally against a non-SSL DB will fail. Edit `env.py` temporarily or point `DATABASE_URL` at a local non-SSL instance.
+- **`%` na DATABASE_URL com Alembic:** `alembic/env.py` passa a URL via `configparser`, que interpreta `%` como sintaxe de interpolação. A linha que seta a URL deve fazer `.replace("%", "%%")`:
+  ```python
+  config.set_main_option("sqlalchemy.url", settings.sqlalchemy_database_uri.replace("%", "%%"))
+  ```
+- **Múltiplos heads no Alembic:** se houver dois branches de migração, `alembic upgrade head` falha. Usar `alembic upgrade heads` (plural) ou criar migration de merge com `down_revision` como tupla.
 - **Tests import path**: `tests/conftest.py` imports from `app.core.dependencies` but the actual module is `app.api.dependencies` — fix before running tests.
 - **Token TTL**: access token expires in 1440 min (24h); refresh token in 7 days (hardcoded in `security.py`).
 - **WebSocket JWT**: WS connections cannot send `Authorization` header — token must go in `?token=<jwt>` query param. Validate with `jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])` directly, not via `Depends(get_current_user)`.
@@ -176,3 +206,4 @@ The ARQ worker must run as a **separate process** — Vercel serverless does not
 - **Soft-delete not automatic**: every CRUD query must explicitly add `.where(Model.deleted_at.is_(None))`.
 - **UUID serialization in ARQ**: pass UUIDs as `str()` in job arguments — ARQ serializes via JSON which doesn't handle UUID natively.
 - **`admin` role in MessageSenderType**: `MessageSenderType` has `patient | doctor | secretary | system` — `admin` role maps to `doctor` in the messages endpoint.
+- **Seed superadmin**: `seed.py` cria o usuário `superadmin@lunna.app` (role `superadmin`, `clinic_id=None`). Deve existir antes de usar o dashboard `/superadmin` no frontend.

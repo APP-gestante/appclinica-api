@@ -27,7 +27,7 @@ class UserUpdate(CoreModel):
     avatar_url: Optional[str] = Field(None, description="URL atualizada do avatar.", examples=["https://clinic.com/avatars/maria_new.jpg"])
 
 class UserResponse(UserBase, BaseEntitySchema):
-    clinic_id: UUID = Field(..., description="Identificador único (UUID) da clínica associada.")
+    clinic_id: Optional[UUID] = Field(None, description="Identificador único (UUID) da clínica associada.")
     is_active: bool = Field(..., description="Indica se a conta de usuário está ativa e habilitada para login.", examples=[True])
 
 # -- Patient --

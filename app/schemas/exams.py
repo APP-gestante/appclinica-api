@@ -32,7 +32,7 @@ class VaccineCreate(CoreModel):
     vaccine_type: str = Field(..., description="Nome da vacina (ex: Influenza, Hepatite B).", examples=["Influenza"])
     date: dt.date = Field(..., description="Data de aplicação ou agendamento.", examples=["2024-03-15"])
     dose_number: Optional[int] = Field(None, description="Número da dose.", examples=[1])
-    status: VaccineStatus = Field(VaccineStatus.scheduled, description="Status (scheduled, completed, missed).", examples=["completed"])
+    status: VaccineStatus = Field(default=VaccineStatus.scheduled, description="Status (scheduled, completed, missed).", examples=["completed"])
     reactions: Optional[str] = Field(None, description="Reações adversas observadas.", examples=["Dor local leve"])
 
 class VaccineUpdate(CoreModel):

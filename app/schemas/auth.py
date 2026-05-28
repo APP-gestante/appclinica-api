@@ -5,7 +5,7 @@ from app.schemas.user import UserResponse
 class Token(BaseModel):
     access_token: str = Field(..., description="Token JWT de acesso (curta duração) para autorizar requisições protegidas.", examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
     refresh_token: str = Field(..., description="Token JWT de atualização (longa duração) para obter novos access tokens.", examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
-    token_type: str = Field("bearer", description="Esquema de autenticação utilizado. Sempre 'bearer'.", examples=["bearer"])
+    token_type: str = Field(default="bearer", description="Esquema de autenticação utilizado. Sempre 'bearer'.", examples=["bearer"])
     user: UserResponse = Field(..., description="Dados resumidos do perfil do usuário autenticado.")
 
 class TokenPayload(BaseModel):
@@ -21,4 +21,4 @@ class RefreshRequest(BaseModel):
 
 class AccessTokenResponse(BaseModel):
     access_token: str = Field(..., description="Novo token JWT de acesso (curta duração).", examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
-    token_type: str = Field("bearer", description="Esquema de autenticação utilizado.", examples=["bearer"])
+    token_type: str = Field(default="bearer", description="Esquema de autenticação utilizado.", examples=["bearer"])

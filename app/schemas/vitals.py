@@ -1,5 +1,5 @@
 from typing import Optional, List
-from datetime import date
+import datetime as dt
 from uuid import UUID
 from pydantic import Field
 from app.schemas.base import CoreModel, BaseEntitySchema
@@ -9,7 +9,7 @@ from app.models.enums import VitalClassification, TimeOfDay, GlucoseMoment
 class ContractionCreate(CoreModel):
     duration_seconds: int = Field(..., description="Duração total da contração uterina medida em segundos.", examples=[45])
     interval_minutes: Optional[float] = Field(None, description="Intervalo de tempo decorrido desde a contração anterior em minutos.", examples=[5.5])
-    session_date: date = Field(..., description="Data da sessão em que o monitoramento está ocorrendo.", examples=["2024-02-15"])
+    session_date: dt.date = Field(..., description="Data da sessão em que o monitoramento está ocorrendo.", examples=["2024-02-15"])
 
 class ContractionResponse(ContractionCreate, BaseEntitySchema):
     patient_id: UUID = Field(..., description="Identificador único (UUID) da paciente gestante.")

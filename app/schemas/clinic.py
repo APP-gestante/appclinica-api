@@ -12,8 +12,8 @@ class ClinicBase(CoreModel):
     phone: Optional[str] = Field(None, description="Telefone de contato da clínica.", examples=["(11) 3000-0000"])
     email: Optional[EmailStr] = Field(None, description="Endereço de email institucional da clínica.", examples=["contato@lunnaclinica.com"])
     website: Optional[str] = Field(None, description="Endereço eletrônico (site oficial) da clínica.", examples=["https://lunnaclinica.com"])
-    timezone: str = Field("America/Sao_Paulo", description="Fuso horário da clínica.", examples=["America/Sao_Paulo"])
-    language: str = Field("pt-BR", description="Idioma padrão da clínica.", examples=["pt-BR"])
+    timezone: str = Field(default="America/Sao_Paulo", description="Fuso horário da clínica.", examples=["America/Sao_Paulo"])
+    language: str = Field(default="pt-BR", description="Idioma padrão da clínica.", examples=["pt-BR"])
 
 class ClinicCreate(ClinicBase):
     pass

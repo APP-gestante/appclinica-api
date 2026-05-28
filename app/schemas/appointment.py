@@ -8,8 +8,8 @@ from app.models.enums import AppointmentStatus, PatientAppointmentStatus, Appoin
 class AppointmentBase(CoreModel):
     date: dt.date = Field(..., description="Data agendada da consulta médica.", examples=["2024-02-15"])
     time: dt.time = Field(..., description="Horário de início da consulta.", examples=["14:30"])
-    duration_minutes: int = Field(30, description="Duração estimada do atendimento clínico em minutos.", examples=[30])
-    type: AppointmentType = Field(AppointmentType.routine, description="Tipo/natureza do atendimento (routine, ultrasound, lab).", examples=["routine"])
+    duration_minutes: int = Field(default=30, description="Duração estimada do atendimento clínico em minutos.", examples=[30])
+    type: AppointmentType = Field(default=AppointmentType.routine, description="Tipo/natureza do atendimento (routine, ultrasound, lab).", examples=["routine"])
     location: Optional[str] = Field(None, description="Local ou consultório físico onde ocorrerá o atendimento.", examples=["Sala 302 - Clínica Lunna"])
     notes: Optional[str] = Field(None, description="Anotações e instruções especiais para o paciente.", examples=["Acompanhamento de rotina de pré-natal."])
 

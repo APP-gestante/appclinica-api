@@ -16,6 +16,8 @@ class User(BaseModel):
     date_of_birth = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
     email_verified = Column(Boolean, default=False)
+    push_token = Column(String(512), nullable=True)
+    onboarding_completed = Column(Boolean, default=False, nullable=False)
     
     # Relações
     clinic = relationship("Clinic", back_populates="users")

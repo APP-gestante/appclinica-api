@@ -1,6 +1,6 @@
 from uuid import UUID
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db, get_current_user, require_role
@@ -60,3 +60,48 @@ async def create_announcement(
     * **`201 CREATED`**: Aviso publicado com sucesso.
     """
     return await crud_ann.create_announcement(db, clinic_id=clinic_id, obj_in=obj_in)
+
+
+@router.get("/clinics/{clinic_id}/announcements/{announcement_id}", response_model=AnnouncementResponse)
+async def get_announcement(
+    clinic_id: UUID,
+    announcement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    **Detalhe de um aviso.**
+
+    ### 📤 Retornos esperados
+    * **`200 OK`**: Dados completos do aviso incluindo `full_description`.
+    * **`404 NOT FOUND`**: Aviso não encontrado.
+    """
+    ann = await crud_ann.get_announcement(db, announcement_id=announcement_id)
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    return ann
+
+
+@router.patch(
+    "/clinics/{clinic_id}/announcements/{announcement_id}/read",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def mark_announcement_read(
+    clinic_id: UUID,
+    announcement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    **Marcar aviso como lido pelo usuário atual.**
+
+    Cria um registro em `user_announcement_reads`. Idempotente — chamadas repetidas não duplicam.
+
+    ### 📤 Retornos esperados
+    * **`204 NO CONTENT`**: Aviso marcado como lido.
+    * **`404 NOT FOUND`**: Aviso não encontrado.
+    """
+    ann = await crud_ann.get_announcement(db, announcement_id=announcement_id)
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    await crud_ann.mark_announcement_read(db, user_id=current_user.id, announcement_id=announcement_id)

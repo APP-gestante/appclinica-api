@@ -268,6 +268,25 @@ async def get_secretary_dashboard(
     return await crud_patient.get_secretary_dashboard(db, clinic_id=current_user.clinic_id)
 
 
+@router.get("/clinics/{clinic_id}/reports/daily", tags=["secretary"])
+async def get_daily_report(
+    clinic_id: UUID,
+    report_date: Optional[date] = Query(None, alias="date", description="Data do relatório (YYYY-MM-DD, padrão: hoje)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["secretary", "admin"])),
+):
+    """
+    **Relatório diário de atividades da clínica.**
+
+    Retorna totais de consultas, confirmadas, canceladas e novas pacientes no dia.
+
+    ### 📌 Requisitos de Segurança
+    * RBAC: `secretary`, `admin`.
+    """
+    day = report_date or date.today()
+    return await crud_patient.get_daily_report(db, clinic_id=clinic_id, day=day)
+
+
 @router.post("/patients", response_model=UserResponse, status_code=status.HTTP_201_CREATED, tags=["secretary"])
 async def create_patient(
     obj_in: UserCreate,

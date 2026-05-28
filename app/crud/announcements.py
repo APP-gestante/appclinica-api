@@ -1,11 +1,11 @@
 from uuid import UUID
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 
-from app.models.announcements import Announcement
+from app.models.announcements import Announcement, UserAnnouncementRead
 from app.models.enums import AnnouncementCategory
 from app.schemas.announcements import AnnouncementCreate
 
@@ -43,6 +43,41 @@ async def get_announcements(
         await db.execute(query.order_by(Announcement.created_at.desc()).offset(skip).limit(limit))
     ).scalars().all()
     return total, [_to_dict(a) for a in items]
+
+
+async def get_announcement(db: AsyncSession, announcement_id: UUID) -> Optional[dict]:
+    result = await db.execute(
+        select(Announcement).where(
+            Announcement.id == announcement_id,
+            Announcement.deleted_at.is_(None),
+        )
+    )
+    a = result.scalar_one_or_none()
+    return _to_dict(a) if a else None
+
+
+async def mark_announcement_read(
+    db: AsyncSession, user_id: UUID, announcement_id: UUID
+) -> UserAnnouncementRead:
+    existing = (
+        await db.execute(
+            select(UserAnnouncementRead).where(
+                UserAnnouncementRead.user_id == user_id,
+                UserAnnouncementRead.announcement_id == announcement_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return existing
+    record = UserAnnouncementRead(
+        user_id=user_id,
+        announcement_id=announcement_id,
+        read_at=datetime.now(timezone.utc),
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+    return record
 
 
 def _to_dict(a: Announcement) -> dict:

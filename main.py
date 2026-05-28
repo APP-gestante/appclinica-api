@@ -28,78 +28,136 @@ async def lifespan(app: FastAPI):
 API_DESCRIPTION = """
 # 🤰 Lunna API — Acompanhamento Pré-natal Premium
 
-Bem-vinda(o) à documentação oficial da API da **Plataforma Lunna (Gerar Vida)**. Esta API RESTful fornece toda a infraestrutura de backend para o aplicativo móvel white-label de acompanhamento pré-natal, projetado sob medida para gestantes atendidas em clínicas privadas de obstetrícia.
+Bem-vinda(o) à documentação oficial da API da **Plataforma Lunna (Gerar Vida)**. Backend white-label para clínicas privadas de obstetrícia, com suporte completo ao app mobile React Native (GerarVida).
 
-A API foi desenvolvida utilizando **FastAPI** para alta performance e validação robusta de tipos, integrada ao **Supabase (PostgreSQL)** para persistência resiliente, **Redis** para cache de respostas e controle de sessões, e **SlowAPI** para proteção contra abusos de taxa (rate limiting).
+Stack: **FastAPI** · **PostgreSQL/Supabase** · **Redis** (cache + Pub/Sub) · **ARQ** (worker assíncrono) · **WebSocket** (chat em tempo real)
 
 ---
 
-## 👥 Perfis de Acesso & Matriz de Permissões
+## 👥 Perfis de Acesso
 
-A plataforma suporta 4 níveis distintos de acesso (`roles`), cada um com responsabilidades e permissões específicas:
-
-| Nível de Acesso | Descrição Funcional | Permissões Principais |
+| Role | Descrição | Acesso principal |
 | :--- | :--- | :--- |
-| **`patient`** | **Paciente (Gestante)** | Visualizar o próprio prontuário, registrar sinais vitais, confirmar agendamentos de consultas e acompanhar estatísticas de gestação. |
-| **`doctor`** | **Médico(a) / Obstetra** | Acompanhar a evolução clínica das pacientes sob seus cuidados, atualizar prontuários, prescrever exames, gerenciar sua própria agenda de consultas. |
-| **`secretary`** | **Secretária / Recepcionista** | Gerenciar o agendamento de consultas de todos os médicos da clínica, cadastrar novas pacientes, gerenciar informações de contato e enviar lembretes. |
-| **`admin`** | **Administrador da Clínica** | Configuração do ambiente SaaS white-label (logo, cores da marca), gerenciamento da equipe (médicos e secretárias), auditoria e configurações gerais. |
+| **`patient`** | Paciente (gestante) | Prontuário, sinais vitais, exames, medicamentos, chat, notificações, nomes de bebê, desenvolvimento fetal |
+| **`doctor`** | Médico(a) / Obstetra | Tudo do patient + prescrever exames/medicamentos + agenda + lista de pacientes |
+| **`secretary`** | Secretária / Recepcionista | Dashboard da clínica + relatório diário + cadastrar pacientes + enviar lembretes |
+| **`admin`** | Administrador da Clínica | Acesso total (equivalente a doctor + secretary) |
+| **`superadmin`** | Administrador da Plataforma | Gerenciamento de clínicas (multi-tenant) |
 
 ---
 
-## 🔒 Segurança & Autenticação
+## 🔒 Autenticação
 
-Todos os recursos protegidos da API exigem autenticação via token JWT (JSON Web Token) no formato **Bearer Token**.
+Todos os recursos protegidos exigem JWT no header:
+```http
+Authorization: Bearer <access_token>
+```
 
-### Passos para Autenticação:
-1. Envie uma requisição `POST /api/v1/auth/login` com email e senha.
-2. O servidor retornará um `access_token` (de curta duração) e um `refresh_token` (de longa duração).
-3. Inclua o token de acesso em todas as chamadas subsequentes no cabeçalho HTTP:
-   ```http
-   Authorization: Bearer <seu_access_token>
-   ```
-
----
-
-## ⚡ Performance, Caching & Limites
-
-Para garantir a melhor experiência móvel e segurança contra negação de serviço:
-* **Cache Inteligente**: Endpoints de leitura estática ou de baixa variação (como informações da clínica ou históricos de exames consolidados) utilizam cache no **Redis** com expiração automática.
-* **Rate Limiting (Limite de Taxa)**: Proteção ativa nos endpoints sensíveis (como Login e registros repetitivos) para evitar abusos de requisições. Se excedido, a API retornará o status `HTTP 429 Too Many Requests`.
+1. `POST /auth/login` → retorna `access_token` (24h) + `refresh_token` (7d)
+2. Ao receber `401`, chame `POST /auth/refresh` com o `refresh_token` para obter novo `access_token` sem novo login
+3. **WebSocket**: token vai no query param `?token=<jwt>` (browsers não suportam header em WS)
 
 ---
 
-## 🛠️ Padrões de Resposta & Erros
+## ⚡ Features Principais
 
-* **Datas e Horas**: Seguem estritamente o padrão **ISO 8601** (exemplo: `YYYY-MM-DD` para datas e `YYYY-MM-DDTHH:MM:SSZ` para carimbos de data/hora UTC).
-* **Erros Padronizados**: Respostas de erro retornam com o formato JSON apropriado:
-  ```json
-  {
-    "detail": "Mensagem detalhada sobre o erro ocorrido."
-  }
-  ```
+| Feature | Endpoint base | Notas |
+| :--- | :--- | :--- |
+| Chat em tempo real | `WS /patients/{id}/ws/chat` | Redis Pub/Sub; fallback HTTP em `POST /patients/{id}/messages` |
+| Push Notifications | via worker ARQ | Expo Push API; requer `PATCH /users/{id}/push-token` após login |
+| Lembretes agendados | `POST /patients/{id}/reminders` | Job ARQ com `_defer_until`; worker obrigatório |
+| Nomes de bebê | `GET /baby-names` | 203 nomes com gênero, origem e trending |
+| Desenvolvimento fetal | `GET /fetal-development/{week}` | Semanas 1–42; rota pública sem auth |
+
+---
+
+## 🛠️ Padrões de Resposta
+
+* **Listas paginadas**: `{ total, limit, offset, data[] }`
+* **Datas**: ISO 8601 — `YYYY-MM-DD` (date) · `YYYY-MM-DDTHH:MM:SSZ` (datetime UTC)
+* **Erros**: `{ "detail": "mensagem" }`
+* **Soft-delete**: registros deletados têm `deleted_at` preenchido e não aparecem em listagens
+
+## ⚠️ Rate Limiting
+
+Proteção ativa em endpoints sensíveis (login, registros). Retorna `HTTP 429 Too Many Requests` se excedido.
 """
 
 openapi_tags = [
+    # ── Autenticação ──────────────────────────────────────────────────────────
     {
         "name": "auth",
-        "description": "🔑 **Autenticação & Controle de Sessão**. Endpoints para login, logout e gerenciamento de tokens JWT (JSON Web Tokens).",
+        "description": "🔑 **Autenticação & Controle de Sessão**. Login, logout e renovação de tokens JWT. O `access_token` expira em 24h; use `/auth/refresh` com o `refresh_token` (7d) para renová-lo sem novo login.",
     },
+    # ── Perfis ────────────────────────────────────────────────────────────────
     {
         "name": "users",
-        "description": "👤 **Gerenciamento de Usuários & Perfis**. Cadastro de usuários, atualização de dados pessoais, preferências de notificação/tema e recuperação de informações da clínica associada.",
+        "description": "👤 **Usuários & Perfis**. CRUD de usuários, atualização de dados pessoais, registro de Expo push token (`push_token`) para notificações mobile e flag de onboarding concluído.",
     },
+    {
+        "name": "patients",
+        "description": "🤰 **Pacientes, Médicos & Secretárias**. Cadastro de pacientes (por secretária), consulta de prontuário, lista de pacientes por médico, dashboards e agenda médica. Inclui rotas de secretária (`/secretary/dashboard`) e médico (`/doctors/{id}/agenda`).",
+    },
+    # ── Clínica ───────────────────────────────────────────────────────────────
+    {
+        "name": "announcements",
+        "description": "📢 **Avisos da Clínica**. Listagem, criação, detalhe e marcação de leitura de avisos. O campo `is_new` indica avisos criados nos últimos 7 dias. Leituras são rastreadas por usuário em `user_announcement_reads`.",
+    },
+    # ── Agenda ────────────────────────────────────────────────────────────────
     {
         "name": "appointments",
-        "description": "📅 **Consultas & Agendamentos**. Criação de consultas, confirmação de presença pela paciente, solicitação de remarcação, aprovação de remarcação pela clínica, cancelamento e visualização de agendas médicas.",
+        "description": "📅 **Consultas & Agendamentos**. Criação de consultas (por médico ou pelo `patient_id`), confirmação, solicitação/aprovação de remarcação, cancelamento e relatório diário da clínica (`GET /clinics/{id}/reports/daily`).",
     },
+    # ── Sinais Vitais ─────────────────────────────────────────────────────────
     {
         "name": "vitals",
-        "description": "🩸 **Sinais Vitais & Biometria**. Registro e monitoramento de sinais vitais essenciais para gestantes (Glicose, Pressão Arterial e Contrações), com endpoints de estatísticas e dados para gráficos.",
+        "description": "🩸 **Sinais Vitais & Biometria**. Registro e monitoramento de Contrações, Glicemia e Pressão Arterial. Inclui endpoints de estatísticas agregadas e séries temporais para gráficos.",
     },
+    # ── Exames ────────────────────────────────────────────────────────────────
     {
         "name": "exams",
-        "description": "🔬 **Exames & Laudos Clínicos**. Gerenciamento de exames clínicos, focando no registro e acompanhamento de ultrassonografias (USG) obstétricas.",
+        "description": "🔬 **Exames de Imagem, Vacinas & Laboratoriais**. Registro de ultrassonografias (USG), vacinas e exames laboratoriais (`lab_tests`). Escrita requer role `doctor` ou `admin`; leitura é aberta a qualquer usuário autenticado.\n\nValores válidos para `lab_test.type`: `hemograma` · `glicemia` · `urina` · `outros`\nValores válidos para `lab_test.status`: `pending` · `completed` · `abnormal`",
+    },
+    # ── Tratamentos ───────────────────────────────────────────────────────────
+    {
+        "name": "medications",
+        "description": "💊 **Medicamentos & Prescrições**. Criação, listagem (com filtro `active?`) e atualização parcial de prescrições. Escrita requer role `doctor` ou `admin`.",
+    },
+    # ── Notificações & Lembretes ──────────────────────────────────────────────
+    {
+        "name": "notifications",
+        "description": "🔔 **Notificações In-App**. Listagem com filtro `unread_only` e marcação de leitura individual. Notificações são criadas automaticamente pelo worker ARQ (`send_push_notification`) e também enviadas via Expo Push API se o usuário tiver `push_token` cadastrado.\n\nTipos: `appointment_reminder` · `clinic_announcement` · `vital_alert`",
+    },
+    {
+        "name": "reminders",
+        "description": "⏰ **Lembretes Agendados**. Criação de lembretes com `send_at` — o servidor enfileira um job ARQ com `_defer_until` que dispara o push no horário exato. Requer role `secretary` ou `admin`. O worker ARQ deve estar em execução.\n\nTipos: `appointment` · `exam` · `medication`",
+    },
+    # ── Chat ──────────────────────────────────────────────────────────────────
+    {
+        "name": "chat",
+        "description": "💬 **Chat em Tempo Real**. Histórico via HTTP (`GET`) + envio via HTTP (`POST`, publica no Redis) + canal **WebSocket** em tempo real.\n\n**WebSocket:** `ws://<host>/api/v1/patients/{patient_id}/ws/chat?token=<jwt>`\n- JWT no query param (WS não suporta header Authorization)\n- Enviar: `{ \"content\": \"mensagem\" }`\n- Receber: objeto `MessageResponse` em JSON\n- Código de desconexão `4001` = token inválido — não reconectar\n\nArquitetura: FastAPI nativo + Redis Pub/Sub por conexão (canal `chat:{patient_id}`).",
+    },
+    # ── Conteúdo Estático ─────────────────────────────────────────────────────
+    {
+        "name": "baby-names",
+        "description": "👶 **Nomes de Bebê**. Listagem com filtros `gender` e `search`, gerenciamento de favoritos por paciente. O campo `is_favorite` é preenchido automaticamente para usuários com role `patient`.\n\nGêneros: `male` · `female` · `neutral` · Tendências: `rising` · `stable` · `declining`",
+    },
+    {
+        "name": "fetal-development",
+        "description": "🫀 **Desenvolvimento Fetal**. Dados clínicos por semana gestacional (1–42): tamanho, peso, descrição e marcos de desenvolvimento (`highlights`). **Rota pública — não requer autenticação.** Dados pré-populados via seed (`python alembic/seeds/fetal_development.py`).",
+    },
+    # ── Administração ─────────────────────────────────────────────────────────
+    {
+        "name": "superadmin",
+        "description": "🛡️ **Superadmin**. Gerenciamento de clínicas e configurações globais da plataforma. Requer role `superadmin`.",
+    },
+    {
+        "name": "doctor",
+        "description": "👨‍⚕️ **Rotas exclusivas de Médico**. Dashboard, agenda e lista de pacientes. Requer role `doctor` ou `admin`.",
+    },
+    {
+        "name": "secretary",
+        "description": "🗂️ **Rotas exclusivas de Secretária**. Dashboard da clínica e cadastro de pacientes. Requer role `secretary` ou `admin`.",
     },
 ]
 

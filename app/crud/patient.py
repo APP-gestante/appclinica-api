@@ -171,6 +171,45 @@ async def get_secretary_dashboard(db: AsyncSession, clinic_id: UUID) -> dict:
     }
 
 
+async def get_daily_report(db: AsyncSession, clinic_id: UUID, day: date) -> dict:
+    base = [
+        Appointment.clinic_id == clinic_id,
+        func.date(Appointment.datetime) == day,
+        Appointment.deleted_at.is_(None),
+    ]
+
+    total = (await db.execute(
+        select(func.count(Appointment.id)).where(*base)
+    )).scalar_one()
+
+    completed = (await db.execute(
+        select(func.count(Appointment.id)).where(*base, Appointment.status == AppointmentStatus.completed)
+    )).scalar_one()
+
+    cancelled = (await db.execute(
+        select(func.count(Appointment.id)).where(*base, Appointment.status == AppointmentStatus.cancelled)
+    )).scalar_one()
+
+    new_patients = (await db.execute(
+        select(func.count(Patient.id))
+        .join(User, Patient.user_id == User.id)
+        .where(
+            User.clinic_id == clinic_id,
+            func.date(Patient.created_at) == day,
+            Patient.deleted_at.is_(None),
+        )
+    )).scalar_one()
+
+    return {
+        "date": str(day),
+        "total_appointments": total,
+        "completed": completed,
+        "cancelled": cancelled,
+        "no_show": 0,
+        "new_patients": new_patients,
+    }
+
+
 async def create_patient_with_user(
     db: AsyncSession,
     name: str,

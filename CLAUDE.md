@@ -187,7 +187,7 @@ pip install -r requirements.txt
 
 ## Deployment
 
-The API deploys to **Vercel** via `vercel.json`. Docker Compose is for local dev — no PostgreSQL container (database lives on Supabase).
+The API deploys to **Vercel** using a modern "Zero Config" approach via `api/index.py` and `vercel.json` (rewrites). Docker Compose is for local dev — no PostgreSQL container (database lives on Supabase).
 
 The ARQ worker must run as a **separate process** — Vercel serverless does not support long-running processes. Deploy the worker on Railway, Render, or a VPS alongside the API.
 

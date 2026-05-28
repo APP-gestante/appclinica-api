@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import date
 import datetime as dt
 from uuid import UUID
 from pydantic import EmailStr, Field

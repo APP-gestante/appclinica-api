@@ -81,7 +81,7 @@ async def mark_announcement_read(
 
 
 def _to_dict(a: Announcement) -> dict:
-    threshold = datetime.utcnow() - timedelta(days=_NEW_THRESHOLD_DAYS)
+    threshold = datetime.now(timezone.utc) - timedelta(days=_NEW_THRESHOLD_DAYS)
     return {
         "id": a.id,
         "clinic_id": a.clinic_id,

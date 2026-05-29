@@ -112,7 +112,7 @@ async def send_message(
         payload = MessageResponse.model_validate(msg).model_dump_json()
         await redis.publish(f"chat:{patient_id}", payload)
     finally:
-        await redis.aclose()
+        await redis.close()
 
     return msg
 
@@ -201,5 +201,5 @@ async def chat_ws(
         redis_task.cancel()
         manager.disconnect(websocket, str(patient_id))
         await pubsub.unsubscribe(f"chat:{patient_id}")
-        await redis_sub.aclose()
-        await redis_pub.aclose()
+        await redis_sub.close()
+        await redis_pub.close()

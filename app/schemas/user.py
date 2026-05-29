@@ -1,5 +1,5 @@
 from typing import Optional
-from datetime import date
+from datetime import date, datetime
 import datetime as dt
 from uuid import UUID
 from pydantic import EmailStr, Field
@@ -48,6 +48,10 @@ class PatientCreate(CoreModel):
 class PatientResponse(PatientCreate, BaseEntitySchema):
     user_id: UUID = Field(..., description="Identificador único do usuário associado a este perfil de paciente.")
     current_week: Optional[int] = Field(None, description="Idade gestacional calculada dinamicamente em semanas.", examples=[24])
+    parity: Optional[str] = Field(None, description="Paridade (ex: G1P0A0).", examples=["G1P0A0"])
+    number_of_fetuses: Optional[int] = Field(None, description="Número de fetos.", examples=[1])
+    cesarean_predicted: Optional[bool] = Field(None, description="Previsão de cesárea.", examples=[False])
+    risk_level: Optional[str] = Field(None, description="Nível de risco gestacional.", examples=["low"])
 
 class PatientUpdate(CoreModel):
     height_cm: Optional[str] = Field(None, description="Altura em centímetros.", examples=["165"])
@@ -58,8 +62,10 @@ class PatientUpdate(CoreModel):
     hospital: Optional[str] = Field(None, description="Maternidade escolhida.", examples=["Hospital Maternidade Santa Joana"])
     risk_level: Optional[str] = Field(None, description="Nível de risco (low, medium, high).", examples=["low"])
     number_of_fetuses: Optional[int] = Field(None, description="Número de fetos.", examples=[1])
-    parity: Optional[str] = Field(None, description="Paridade (ex: G1P0).", examples=["G1P0"])
+    parity: Optional[str] = Field(None, description="Paridade (ex: G1P0A0).", examples=["G1P0A0"])
     cesarean_predicted: Optional[bool] = Field(None, description="Previsão de cesárea.", examples=[False])
+    lmp_date: Optional[dt.date] = Field(None, description="Data da Última Menstruação (correção).", examples=["2023-11-01"])
+    edd: Optional[dt.date] = Field(None, description="Data Provável do Parto (correção).", examples=["2024-08-07"])
 
 class PatientDetailResponse(PatientResponse):
     user: UserResponse = Field(..., description="Dados do usuário associado.")
@@ -83,7 +89,7 @@ class ProntuarioResponse(CoreModel):
     patient_id: UUID
     dados_clinicos: PatientResponse
     user: UserResponse
-    updated_at: Optional[date] = None
+    updated_at: Optional[datetime] = None
 
 # -- Clinic schemas moved to clinic.py --
 

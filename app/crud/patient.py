@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, or_
+from sqlalchemy.orm import joinedload
 
 from app.models.user import User, Patient
 from app.models.appointments import Appointment
@@ -92,6 +93,7 @@ async def get_doctor_dashboard(db: AsyncSession, doctor_id: UUID) -> dict:
 async def get_doctor_agenda_day(db: AsyncSession, doctor_id: UUID, day: date) -> List[Appointment]:
     rows = (await db.execute(
         select(Appointment)
+        .options(joinedload(Appointment.patient).joinedload(Patient.user))
         .where(
             Appointment.doctor_id == doctor_id,
             Appointment.date == day,
@@ -106,6 +108,7 @@ async def get_doctor_agenda_week(db: AsyncSession, doctor_id: UUID, start: date)
     end = start + timedelta(days=6)
     rows = (await db.execute(
         select(Appointment)
+        .options(joinedload(Appointment.patient).joinedload(Patient.user))
         .where(
             Appointment.doctor_id == doctor_id,
             Appointment.date >= start,

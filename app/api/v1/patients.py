@@ -8,6 +8,8 @@ from app.api.dependencies import get_db, get_current_user, require_role
 from app.core.security import get_password_hash
 from app.models.user import User
 from app.crud import patient as crud_patient
+from app.crud import patient_anamnesis as crud_anamnesis
+from app.schemas.patient_anamnesis import AnamnesisCreate, AnamnesisResponse
 from app.schemas.user import (
     PatientDetailResponse,
     PatientListResponse,
@@ -205,6 +207,11 @@ async def get_doctor_agenda(
                     "patient_status": a.patient_status,
                     "location": a.location,
                     "notes": a.notes,
+                    "patient_id": str(a.patient_id),
+                    "patient": {
+                        "id": str(a.patient.user.id) if a.patient and a.patient.user else None,
+                        "name": a.patient.user.name if a.patient and a.patient.user else None,
+                    } if a.patient else None,
                 }
                 for a in appointments
             ],
@@ -223,6 +230,14 @@ async def get_doctor_agenda(
                     "duration_minutes": a.duration_minutes,
                     "type": a.type,
                     "status": a.status,
+                    "patient_status": a.patient_status,
+                    "location": a.location,
+                    "notes": a.notes,
+                    "patient_id": str(a.patient_id),
+                    "patient": {
+                        "id": str(a.patient.user.id) if a.patient and a.patient.user else None,
+                        "name": a.patient.user.name if a.patient and a.patient.user else None,
+                    } if a.patient else None,
                 }
                 for a in appointments
             ],
@@ -322,3 +337,32 @@ async def create_patient(
         edd=edd,
     )
     return user
+
+
+# ── Anamnese ──────────────────────────────────────────────────────────────────
+
+@router.get("/patients/{patient_id}/anamnesis", response_model=AnamnesisResponse, tags=["patients"])
+async def get_anamnesis(
+    patient_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna a anamnese estruturada da gestante."""
+    ana = await crud_anamnesis.get_anamnesis(db, patient_id=patient_id)
+    if not ana:
+        raise HTTPException(status_code=404, detail="Anamnesis not found")
+    return ana
+
+
+@router.post("/patients/{patient_id}/anamnesis", response_model=AnamnesisResponse, tags=["patients"])
+async def upsert_anamnesis(
+    patient_id: UUID,
+    obj_in: AnamnesisCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["doctor", "admin"])),
+):
+    """Cria ou atualiza a anamnese da gestante (upsert)."""
+    patient = await crud_patient.get_patient(db, patient_id=patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return await crud_anamnesis.upsert_anamnesis(db, patient_id=patient_id, obj_in=obj_in)

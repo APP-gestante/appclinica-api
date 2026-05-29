@@ -1,5 +1,6 @@
 from uuid import UUID
 from datetime import datetime
+from typing import List as TypingList
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,10 +8,12 @@ from app.api.dependencies import get_db, get_current_user, require_role
 from app.models.user import User
 from app.models.enums import AppointmentStatus, PatientAppointmentStatus
 from app.crud import appointment as crud_appointment
+from app.crud import appointment_evolution as crud_evo
 from app.schemas.appointment import (
     AppointmentResponse, AppointmentCreate, AppointmentCreateForPatient,
     AppointmentListResponse, AppointmentRescheduleRequest, AppointmentRescheduleApprove
 )
+from app.schemas.appointment_evolution import EvolutionCreate, EvolutionResponse
 
 router = APIRouter()
 
@@ -286,3 +289,77 @@ async def cancel_appointment(
         "cancelled_at": datetime.utcnow()
     }
     await crud_appointment.update_appointment(db, db_obj=appointment, obj_in=update_data)
+
+
+# ── Evolução por consulta ──────────────────────────────────────────────────────
+
+@router.get(
+    "/appointments/{appointment_id}/evolution",
+    response_model=EvolutionResponse,
+    tags=["appointments"],
+)
+async def get_evolution(
+    appointment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from sqlalchemy.future import select as sa_select
+    from app.models.appointments import Appointment as ApptModel
+    result = await db.execute(
+        sa_select(ApptModel).where(ApptModel.id == appointment_id, ApptModel.deleted_at.is_(None))
+    )
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    evo = await crud_evo.get_evolution(db, appointment_id=appt.id)
+    if not evo:
+        raise HTTPException(status_code=404, detail="Evolution not found")
+    return evo
+
+
+@router.post(
+    "/appointments/{appointment_id}/evolution",
+    response_model=EvolutionResponse,
+    tags=["appointments"],
+)
+async def upsert_evolution(
+    appointment_id: UUID,
+    obj_in: EvolutionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from sqlalchemy.future import select as sa_select
+    from app.models.appointments import Appointment as ApptModel
+    result = await db.execute(
+        sa_select(ApptModel).where(ApptModel.id == appointment_id, ApptModel.deleted_at.is_(None))
+    )
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    return await crud_evo.upsert_evolution(
+        db,
+        appointment_id=appt.id,
+        patient_id=appt.patient_id,
+        obj_in=obj_in,
+    )
+
+
+@router.get(
+    "/patients/{patient_id}/evolutions",
+    response_model=TypingList[EvolutionResponse],
+    tags=["appointments"],
+)
+async def list_patient_evolutions(
+    patient_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna todas as evoluções por consulta de uma gestante, em ordem cronológica."""
+    from sqlalchemy.future import select as sa_select
+    from app.models.user import Patient
+    result = await db.execute(
+        sa_select(Patient).where(Patient.id == patient_id, Patient.deleted_at.is_(None))
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return await crud_evo.get_patient_evolutions(db, patient_id=patient_id)

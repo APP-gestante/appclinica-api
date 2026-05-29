@@ -9,11 +9,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Run dev server
-uvicorn main:app --reload
-
-# Run with Docker (Redis + API)
+# Run dev server (always use Docker)
 docker-compose up -d --build
+
+# Stop
+docker-compose down
+
+# View logs
+docker-compose logs -f api
 
 # Run all tests (requires local PostgreSQL at localhost:5432/appclinica_test)
 pytest

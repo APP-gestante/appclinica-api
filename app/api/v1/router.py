@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     auth, users, appointments, vitals, exams, patients, announcements, superadmin,
     lab_tests, medications, notifications, reminders, baby_names, fetal_development,
-    messages,
+    messages, card,
 )
 
 api_router = APIRouter()
@@ -21,3 +21,4 @@ api_router.include_router(messages.router, tags=["chat"])
 api_router.include_router(patients.router, tags=["patients", "doctor", "secretary"])
 api_router.include_router(announcements.router, tags=["announcements"])
 api_router.include_router(superadmin.router, prefix="/superadmin", tags=["superadmin"])
+api_router.include_router(card.router, tags=["card"])

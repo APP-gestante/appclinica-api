@@ -12,3 +12,6 @@ from app.models.reminders import Reminder
 from app.models.baby_names import BabyName, PatientBabyNameFavorite
 from app.models.fetal_development import FetalDevelopment
 from app.models.messages import Message
+from app.models.appointment_evolution import AppointmentEvolution  # noqa: F401
+from app.models.patient_anamnesis import PatientAnamnesis  # noqa: F401
+from app.models.card import DoctorCardSection, PatientCardEntry, PatientCardFieldValue  # noqa: F401

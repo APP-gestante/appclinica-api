@@ -27,5 +27,13 @@ class AppointmentEvolution(BaseModel):
     bp_diastolic = Column(SmallInteger, nullable=True)
     clinical_notes = Column(Text, nullable=True)
 
+    queixas = Column(Text, nullable=True)
+    observacoes_medicas = Column(Text, nullable=True)
+    pfe_gramas = Column(SmallInteger, nullable=True)
+    pfe_percentil = Column(String(10), nullable=True)
+    doppler = Column(String(50), nullable=True)
+    observacoes_exame_fisico = Column(Text, nullable=True)
+    conduta = Column(Text, nullable=True)
+
     appointment = relationship("Appointment")
     patient = relationship("Patient")

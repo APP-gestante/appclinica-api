@@ -16,6 +16,14 @@ class EvolutionBase(CoreModel):
     bp_diastolic: Optional[int] = None
     clinical_notes: Optional[str] = None
 
+    queixas: Optional[str] = None
+    observacoes_medicas: Optional[str] = None
+    pfe_gramas: Optional[int] = None
+    pfe_percentil: Optional[str] = None
+    doppler: Optional[str] = None
+    observacoes_exame_fisico: Optional[str] = None
+    conduta: Optional[str] = None
+
 
 class EvolutionCreate(EvolutionBase):
     pass

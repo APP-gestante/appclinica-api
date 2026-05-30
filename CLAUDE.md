@@ -194,6 +194,13 @@ The API deploys to **Vercel** using a modern "Zero Config" approach via `api/ind
 
 The ARQ worker must run as a **separate process** — Vercel serverless does not support long-running processes. Deploy the worker on Railway, Render, or a VPS alongside the API.
 
+## Histórico de Migrações Relevantes
+
+| Revision | Descrição |
+|---|---|
+| `g7h8i9j0k1l2` | Adiciona campos clínicos em `appointment_evolutions`: `queixas`, `observacoes_medicas`, `pfe_gramas`, `pfe_percentil`, `doppler`, `observacoes_exame_fisico`, `conduta` |
+| `m1n2o3p4q5r6` | Merge dos heads `917cfc2cf59c` e `g7h8i9j0k1l2` |
+
 ## Key Gotchas
 
 - **Alembic SSL**: `alembic/env.py` uses `connect_args={"ssl": "require"}` — running migrations locally against a non-SSL DB will fail. Edit `env.py` temporarily or point `DATABASE_URL` at a local non-SSL instance.

@@ -32,7 +32,20 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_URL: Optional[str] = None
-    
+
+    # Environment
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = False
+
+    # SMTP
+    SMTP_SERVER: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+
+    # Expo Push Notifications
+    EXPO_PUSH_TOKEN_URL: str = "https://exp.host/--/api/v2/push/send"
+
     @property
     def sqlalchemy_database_uri(self) -> str:
         if self.DATABASE_URL:

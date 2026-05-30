@@ -1899,7 +1899,51 @@ ORDER BY idx_scan DESC;
 
 ---
 
-**Última atualização:** Fevereiro 2024
+---
+
+## Tabela: appointment_evolutions
+
+Registra a evolução clínica de cada consulta. Relação 1:1 com `appointments`.
+
+```sql
+CREATE TABLE appointment_evolutions (
+  id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  appointment_id           UUID NOT NULL UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
+  patient_id               UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+
+  -- Sinais vitais e medidas
+  weight_kg                NUMERIC(5,2),
+  fundal_height_cm         NUMERIC(4,1),
+  fetal_heart_rate         SMALLINT,
+  bp_systolic              SMALLINT,
+  bp_diastolic             SMALLINT,
+
+  -- Status fetal
+  presentation             fetal_presentation_enum,  -- cephalic | breech | transverse
+  fetal_movements          BOOLEAN,
+  edema                    VARCHAR(5),               -- none | + | ++ | +++
+
+  -- Campos clínicos narrativos
+  queixas                  TEXT,
+  observacoes_medicas      TEXT,   -- confidencial, visível apenas para a equipe médica
+  pfe_gramas               SMALLINT,
+  pfe_percentil            VARCHAR(10),
+  doppler                  VARCHAR(50),              -- normal | alterado | não realizado
+  observacoes_exame_fisico TEXT,
+  conduta                  TEXT,
+  clinical_notes           TEXT,
+
+  created_at               TIMESTAMPTZ DEFAULT now(),
+  updated_at               TIMESTAMPTZ DEFAULT now(),
+  deleted_at               TIMESTAMPTZ
+);
+```
+
+Migration: `g7h8i9j0k1l2` (2026-05-29) adicionou os campos clínicos narrativos.
+
+---
+
+**Última atualização:** Maio 2026
 
 **Próximas etapas:** Executar script SQL no Supabase e configurar RLS policies
 
